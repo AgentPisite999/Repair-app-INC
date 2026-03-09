@@ -14,16 +14,13 @@ function toISODateOnly(v) {
   const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
   return m ? m[1] : "";
 }
+
 function isISODate(v) {
   return /^\d{4}-\d{2}-\d{2}$/.test(String(v || "").trim());
 }
 
 function isAdminRole(role) {
-  return (
-    String(role || "")
-      .toLowerCase()
-      .trim() === "admin"
-  );
+  return String(role || "").toLowerCase().trim() === "admin";
 }
 
 function norm(v) {
@@ -33,26 +30,29 @@ function norm(v) {
 const renderAnalytics = async (req, res) => {
   try {
     const statusResult = await db.query(
-      `SELECT DISTINCT "Status" FROM job_data WHERE "Status" IS NOT NULL AND "Status" != '' ORDER BY "Status"`,
+      `SELECT DISTINCT "Status"
+       FROM repair_app.job_data
+       WHERE "Status" IS NOT NULL AND "Status" != ''
+       ORDER BY "Status"`
     );
     const statuses = statusResult.rows.map((r) => r.Status);
 
     const whResult = await db.query(
       `SELECT wh_id AS "WhID", warehouse_name AS "WarehouseName"
-       FROM "Warehouse_Master"
-       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
+       FROM repair_app."Warehouse_Master"
+       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`
     );
 
     const courierResult = await db.query(
       `SELECT courier_id AS "CourierID", courier_name AS "CourierName"
-       FROM "Courier_Master"
-       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
+       FROM repair_app."Courier_Master"
+       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`
     );
 
     const vendorResult = await db.query(
       `SELECT vendor_id AS "VendorID", vendor_name AS "VendorName"
-       FROM "Vendor_Master"
-       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
+       FROM repair_app."Vendor_Master"
+       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`
     );
 
     res.render("action-analytics", {
@@ -64,7 +64,7 @@ const renderAnalytics = async (req, res) => {
       vendors: vendorResult.rows || [],
     });
   } catch (err) {
-    console.error("renderAnalytics error:", err.message);
+    console.error("renderAnalytics error:", err);
     res.status(500).send("Server error");
   }
 };
@@ -80,8 +80,8 @@ const getJobs = async (req, res) => {
     const isAdmin = isAdminRole(role);
     const whId = isWarehouse ? extractWhIdFromRole(role) : null;
 
-    let where = [];
-    let params = [];
+    const where = [];
+    const params = [];
     let paramIndex = 1;
 
     if (!isAdmin) {
@@ -98,18 +98,21 @@ const getJobs = async (req, res) => {
       where.push(`"Status" = $${paramIndex++}`);
       params.push(status);
     }
+
     if (year && year !== "all") {
       where.push(`TO_CHAR("CreatedAt"::timestamp, 'YYYY') = $${paramIndex++}`);
       params.push(String(year));
     }
+
     if (month && month !== "all") {
       where.push(`TO_CHAR("CreatedAt"::timestamp, 'MM') = $${paramIndex++}`);
       params.push(String(month).padStart(2, "0"));
     }
+
     if (search && search.trim()) {
       const s = `%${search.trim()}%`;
       where.push(
-        `("Job_Id" ILIKE $${paramIndex} OR "CustomerName" ILIKE $${paramIndex + 1} OR "CustomerNumber" ILIKE $${paramIndex + 2} OR "ITEM_ID" ILIKE $${paramIndex + 3} OR "Store_Id" ILIKE $${paramIndex + 4} OR "AWB" ILIKE $${paramIndex + 5} OR "WarehouseID" ILIKE $${paramIndex + 6})`,
+        `("Job_Id" ILIKE $${paramIndex} OR "CustomerName" ILIKE $${paramIndex + 1} OR "CustomerNumber" ILIKE $${paramIndex + 2} OR "ITEM_ID" ILIKE $${paramIndex + 3} OR "Store_Id" ILIKE $${paramIndex + 4} OR "AWB" ILIKE $${paramIndex + 5} OR "WarehouseID" ILIKE $${paramIndex + 6})`
       );
       params.push(s, s, s, s, s, s, s);
       paramIndex += 7;
@@ -118,18 +121,24 @@ const getJobs = async (req, res) => {
     const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
     const kpiResult = await db.query(
-      `SELECT "Status", COUNT(*) as cnt FROM job_data ${whereClause} GROUP BY "Status"`,
-      params,
+      `SELECT "Status", COUNT(*) as cnt
+       FROM repair_app.job_data
+       ${whereClause}
+       GROUP BY "Status"`,
+      params
     );
 
-    let total = 0,
-      closed = 0,
-      pending = 0;
+    let total = 0;
+    let closed = 0;
+    let pending = 0;
+
     (kpiResult.rows || []).forEach((r) => {
-      total += parseInt(r.cnt);
-      if ((r.Status || "").toLowerCase() === "closed")
-        closed += parseInt(r.cnt);
-      else pending += parseInt(r.cnt);
+      total += parseInt(r.cnt, 10);
+      if ((r.Status || "").toLowerCase() === "closed") {
+        closed += parseInt(r.cnt, 10);
+      } else {
+        pending += parseInt(r.cnt, 10);
+      }
     });
 
     const jobsResult = await db.query(
@@ -145,8 +154,10 @@ const getJobs = async (req, res) => {
               "Store_Sent_Date", "Store_Received_Date",
               "Closing_Ticket_Remarks",
               "admin_logs"
-       FROM job_data ${whereClause} ORDER BY id DESC`,
-      params,
+       FROM repair_app.job_data
+       ${whereClause}
+       ORDER BY id DESC`,
+      params
     );
 
     return res.json({
@@ -155,6 +166,7 @@ const getJobs = async (req, res) => {
       jobs: jobsResult.rows || [],
     });
   } catch (err) {
+    console.error("getJobs error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -170,6 +182,7 @@ const adminUpdateJob = async (req, res) => {
     req.session.userId ||
     "admin"
   ).toString();
+
   const { jobId, updates, note } = req.body || {};
 
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
@@ -215,8 +228,8 @@ const adminUpdateJob = async (req, res) => {
 
   try {
     const result = await db.query(
-      `SELECT * FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT * FROM repair_app.job_data WHERE "Job_Id" = $1`,
+      [jobId]
     );
     const row = result.rows[0];
     if (!row) return res.json({ success: false, message: "Job not found" });
@@ -267,14 +280,19 @@ const adminUpdateJob = async (req, res) => {
     values.push(jobId);
 
     const updateResult = await db.query(
-      `UPDATE job_data SET ${setClauses.join(", ")} WHERE "Job_Id" = $${paramIndex}`,
-      values,
+      `UPDATE repair_app.job_data
+       SET ${setClauses.join(", ")}
+       WHERE "Job_Id" = $${paramIndex}`,
+      values
     );
 
-    if (updateResult.rowCount === 0)
+    if (updateResult.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("adminUpdateJob error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -282,27 +300,34 @@ const adminUpdateJob = async (req, res) => {
 const getStatuses = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT DISTINCT "Status" FROM job_data WHERE "Status" IS NOT NULL AND "Status" != '' ORDER BY "Status"`,
+      `SELECT DISTINCT "Status"
+       FROM repair_app.job_data
+       WHERE "Status" IS NOT NULL AND "Status" != ''
+       ORDER BY "Status"`
     );
     res.json({ success: true, statuses: result.rows.map((r) => r.Status) });
   } catch (err) {
+    console.error("getStatuses error:", err);
     res.json({ success: false, message: err.message });
   }
 };
 
 const getAttachment = async (req, res) => {
   const { jobId } = req.params;
-  if (!jobId)
+  if (!jobId) {
     return res.status(400).json({ success: false, message: "Job ID required" });
+  }
 
   try {
     const result = await db.query(
-      `SELECT "Attachment" FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT "Attachment" FROM repair_app.job_data WHERE "Job_Id" = $1`,
+      [jobId]
     );
     const row = result.rows[0];
-    if (!row || !row.Attachment)
+
+    if (!row || !row.Attachment) {
       return res.status(404).json({ success: false, message: "No attachment" });
+    }
 
     let att;
     try {
@@ -313,10 +338,11 @@ const getAttachment = async (req, res) => {
         .json({ success: false, message: "Invalid attachment" });
     }
 
-    if (!att || !att.buffer)
+    if (!att || !att.buffer) {
       return res
         .status(404)
         .json({ success: false, message: "No attachment data" });
+    }
 
     const buf = Buffer.from(att.buffer, "base64");
     res.set({
@@ -326,20 +352,26 @@ const getAttachment = async (req, res) => {
     });
     res.send(buf);
   } catch (err) {
+    console.error("getAttachment error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 const getWhAttachment = async (req, res) => {
   const { jobId } = req.params;
+
   try {
     const result = await db.query(
-      `SELECT "WarehouseAttachment" FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT "WarehouseAttachment"
+       FROM repair_app.job_data
+       WHERE "Job_Id" = $1`,
+      [jobId]
     );
     const row = result.rows[0];
-    if (!row || !row.WarehouseAttachment)
+
+    if (!row || !row.WarehouseAttachment) {
       return res.status(404).json({ success: false, message: "No attachment" });
+    }
 
     let att;
     try {
@@ -350,10 +382,11 @@ const getWhAttachment = async (req, res) => {
         .json({ success: false, message: "Invalid attachment" });
     }
 
-    if (!att || !att.buffer)
+    if (!att || !att.buffer) {
       return res
         .status(404)
         .json({ success: false, message: "No attachment data" });
+    }
 
     const buf = Buffer.from(att.buffer, "base64");
     res.set({
@@ -363,33 +396,44 @@ const getWhAttachment = async (req, res) => {
     });
     res.send(buf);
   } catch (err) {
+    console.error("getWhAttachment error:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
 const updateDeliveryDate = async (req, res) => {
   const { jobId, deliveryDate } = req.body;
-  if (!jobId || !deliveryDate)
+
+  if (!jobId || !deliveryDate) {
     return res.json({ success: false, message: "Missing fields" });
+  }
 
   try {
     const result = await db.query(
-      `UPDATE job_data SET "DeliveryDate" = $1 WHERE "Job_Id" = $2`,
-      [deliveryDate, jobId],
+      `UPDATE repair_app.job_data
+       SET "DeliveryDate" = $1
+       WHERE "Job_Id" = $2`,
+      [deliveryDate, jobId]
     );
-    if (result.rowCount === 0)
+
+    if (result.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("updateDeliveryDate error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
 
 const closeTicket = async (req, res) => {
   const { jobId, verified_otp, closing_remarks } = req.body;
+
   if (!jobId) return res.json({ success: false, message: "Missing Job ID" });
-  if (!verified_otp)
+  if (!verified_otp) {
     return res.json({ success: false, message: "OTP verification required" });
+  }
   if (!closing_remarks || !closing_remarks.trim()) {
     return res.json({
       success: false,
@@ -399,55 +443,70 @@ const closeTicket = async (req, res) => {
 
   try {
     const jobResult = await db.query(
-      `SELECT "Status", "CustomerNumber" FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT "Status", "CustomerNumber"
+       FROM repair_app.job_data
+       WHERE "Job_Id" = $1`,
+      [jobId]
     );
     const row = jobResult.rows[0];
+
     if (!row) return res.json({ success: false, message: "Job not found" });
-    if ((row.Status || "").toLowerCase() === "closed")
+    if ((row.Status || "").toLowerCase() === "closed") {
       return res.json({ success: false, message: "Ticket already closed" });
+    }
 
     const phone = (row.CustomerNumber || "").trim();
-    if (!phone)
+    if (!phone) {
       return res.json({
         success: false,
         message: "No customer phone on this job",
       });
+    }
 
     const istNow = getISTTimestamp();
 
     const otpResult = await db.query(
-      `SELECT otp, job_id FROM otp_store
+      `SELECT otp, job_id
+       FROM repair_app.otp_store
        WHERE phone = $1 AND job_id = $2 AND expires_at > $3
-       ORDER BY created_at DESC LIMIT 1`,
-      [phone, jobId, istNow],
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [phone, jobId, istNow]
     );
     const otpRow = otpResult.rows[0];
-    if (!otpRow)
+
+    if (!otpRow) {
       return res.json({
         success: false,
         message: "OTP expired or not found. Please resend.",
       });
-    if (otpRow.otp !== verified_otp.trim())
+    }
+
+    if (otpRow.otp !== verified_otp.trim()) {
       return res.json({ success: false, message: "Invalid OTP" });
+    }
 
     const updateResult = await db.query(
-      `UPDATE job_data
+      `UPDATE repair_app.job_data
        SET "Status" = 'Closed',
            "Ticket_Closing_Date" = $1,
            "Closing_Ticket_Remarks" = $2
        WHERE "Job_Id" = $3`,
-      [istNow, closing_remarks.trim(), jobId],
+      [istNow, closing_remarks.trim(), jobId]
     );
-    if (updateResult.rowCount === 0)
-      return res.json({ success: false, message: "Job not found" });
 
-    await db.query(`DELETE FROM otp_store WHERE phone = $1 AND job_id = $2`, [
-      phone,
-      jobId,
-    ]);
+    if (updateResult.rowCount === 0) {
+      return res.json({ success: false, message: "Job not found" });
+    }
+
+    await db.query(
+      `DELETE FROM repair_app.otp_store WHERE phone = $1 AND job_id = $2`,
+      [phone, jobId]
+    );
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("closeTicket error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -466,15 +525,17 @@ const saveWarehouseDraft = async (req, res) => {
   const whFile = req.file || null;
 
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!warehouse_id)
+  if (!warehouse_id) {
     return res.json({ success: false, message: "Please select a warehouse" });
+  }
 
   try {
     const result = await db.query(
-      `SELECT "Status" FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
+      [jobId]
     );
     const row = result.rows[0];
+
     if (!row) return res.json({ success: false, message: "Job not found" });
 
     if ((row.Status || "").toLowerCase() === "closed") {
@@ -521,13 +582,19 @@ const saveWarehouseDraft = async (req, res) => {
     vals.push(jobId);
 
     const updateResult = await db.query(
-      `UPDATE job_data SET ${setClauses.join(", ")} WHERE "Job_Id" = $${paramIndex}`,
-      vals,
+      `UPDATE repair_app.job_data
+       SET ${setClauses.join(", ")}
+       WHERE "Job_Id" = $${paramIndex}`,
+      vals
     );
-    if (updateResult.rowCount === 0)
+
+    if (updateResult.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("saveWarehouseDraft error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -546,13 +613,14 @@ const transferToWarehouse = async (req, res) => {
   const whFile = req.file || null;
 
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!warehouse_id)
+  if (!warehouse_id) {
     return res.json({ success: false, message: "Please select a warehouse" });
+  }
 
   try {
     const result = await db.query(
-      `SELECT "Status" FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
+      [jobId]
     );
     const row = result.rows[0];
     if (!row) return res.json({ success: false, message: "Job not found" });
@@ -601,13 +669,19 @@ const transferToWarehouse = async (req, res) => {
     vals.push(jobId);
 
     const updateResult = await db.query(
-      `UPDATE job_data SET ${setClauses.join(", ")} WHERE "Job_Id" = $${paramIndex}`,
-      vals,
+      `UPDATE repair_app.job_data
+       SET ${setClauses.join(", ")}
+       WHERE "Job_Id" = $${paramIndex}`,
+      vals
     );
-    if (updateResult.rowCount === 0)
+
+    if (updateResult.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("transferToWarehouse error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -618,24 +692,31 @@ const warehouseAcknowledge = async (req, res) => {
 
   try {
     const result = await db.query(
-      `SELECT "Status" FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
+      [jobId]
     );
-    if (!result.rows[0])
+
+    if (!result.rows[0]) {
       return res.json({ success: false, message: "Job not found" });
+    }
 
     const istNow = getISTTimestamp();
+
     const updateResult = await db.query(
-      `UPDATE job_data
+      `UPDATE repair_app.job_data
        SET "Status" = 'Warehouse Received',
            "Warehouse_Receive_Date" = $1
        WHERE "Job_Id" = $2`,
-      [istNow, jobId],
+      [istNow, jobId]
     );
-    if (updateResult.rowCount === 0)
+
+    if (updateResult.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("warehouseAcknowledge error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -645,23 +726,27 @@ const saveVendorDraft = async (req, res) => {
     req.body;
 
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!vendor_name)
+  if (!vendor_name) {
     return res.json({ success: false, message: "Please select a vendor" });
+  }
 
   const draftDate = (vendor_sent_date || "").trim();
 
   try {
     const result = await db.query(
       `SELECT "Status", "Warehouse_Receive_Date", "DeliveryDate"
-       FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+       FROM repair_app.job_data
+       WHERE "Job_Id" = $1`,
+      [jobId]
     );
     const row = result.rows[0];
+
     if (!row) return res.json({ success: false, message: "Job not found" });
 
     const st = (row.Status || "").toLowerCase().trim();
-    if (st === "closed")
+    if (st === "closed") {
       return res.json({ success: false, message: "Ticket is closed." });
+    }
 
     const recvISO = toISODateOnly(row.Warehouse_Receive_Date);
     const delISO = toISODateOnly(row.DeliveryDate);
@@ -688,11 +773,11 @@ const saveVendorDraft = async (req, res) => {
     }
 
     const updateResult = await db.query(
-      `UPDATE job_data
-       SET "Vendor_Name"      = $1,
-           "Gate_Pass_No"     = $2,
+      `UPDATE repair_app.job_data
+       SET "Vendor_Name" = $1,
+           "Gate_Pass_No" = $2,
            "Vendor_Sent_Date" = $3,
-           "Vendor_Awb"       = $4
+           "Vendor_Awb" = $4
        WHERE "Job_Id" = $5`,
       [
         (vendor_name || "").trim(),
@@ -700,12 +785,16 @@ const saveVendorDraft = async (req, res) => {
         draftDate || "",
         (vendor_awb || "").trim(),
         jobId,
-      ],
+      ]
     );
-    if (updateResult.rowCount === 0)
+
+    if (updateResult.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("saveVendorDraft error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -715,61 +804,73 @@ const sendToVendor = async (req, res) => {
     req.body;
 
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!vendor_name)
+  if (!vendor_name) {
     return res.json({ success: false, message: "Please select a vendor" });
-  if (!vendor_sent_date || !String(vendor_sent_date).trim())
+  }
+  if (!vendor_sent_date || !String(vendor_sent_date).trim()) {
     return res.json({ success: false, message: "Please select a date" });
+  }
 
   const sentDate = String(vendor_sent_date).trim();
-  if (!isISODate(sentDate))
+
+  if (!isISODate(sentDate)) {
     return res.json({
       success: false,
       message: "Invalid date format (expected YYYY-MM-DD)",
     });
+  }
 
   try {
     const result = await db.query(
       `SELECT "Status", "Warehouse_Receive_Date", "DeliveryDate"
-       FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+       FROM repair_app.job_data
+       WHERE "Job_Id" = $1`,
+      [jobId]
     );
     const row = result.rows[0];
+
     if (!row) return res.json({ success: false, message: "Job not found" });
 
     const recvISO = toISODateOnly(row.Warehouse_Receive_Date);
     const delISO = toISODateOnly(row.DeliveryDate);
 
-    if (!recvISO)
+    if (!recvISO) {
       return res.json({
         success: false,
         message:
           "Warehouse Receive Date is missing. Please Acknowledge & Receive first.",
       });
-    if (!delISO)
+    }
+
+    if (!delISO) {
       return res.json({
         success: false,
         message:
           "Delivery Date is missing. Please ask Store to update Delivery Date first.",
       });
+    }
 
-    if (sentDate < recvISO)
+    if (sentDate < recvISO) {
       return res.json({
         success: false,
         message: `Date must be on/after Warehouse Receive Date (${recvISO}).`,
       });
-    if (sentDate > delISO)
+    }
+
+    if (sentDate > delISO) {
       return res.json({
         success: false,
         message: `Date must be on/before Delivery Date (${delISO}).`,
       });
+    }
 
     const updateResult = await db.query(
-      `UPDATE job_data
+      `UPDATE repair_app.job_data
        SET "Status" = 'Sent to Vendor',
-           "Vendor_Name"      = $1,
-           "Gate_Pass_No"     = $2,
+           "Vendor_Name" = $1,
+           "Gate_Pass_No" = $2,
            "Vendor_Sent_Date" = $3,
-           "Vendor_Awb"       = $4
+           "Vendor_Awb" = $4
        WHERE "Job_Id" = $5`,
       [
         (vendor_name || "").trim(),
@@ -777,12 +878,16 @@ const sendToVendor = async (req, res) => {
         sentDate,
         (vendor_awb || "").trim(),
         jobId,
-      ],
+      ]
     );
-    if (updateResult.rowCount === 0)
+
+    if (updateResult.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("sendToVendor error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -791,70 +896,87 @@ const vendorDecision = async (req, res) => {
   const { jobId, vendor_decision, vendor_decision_date } = req.body;
 
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!vendor_decision)
+  if (!vendor_decision) {
     return res.json({ success: false, message: "Please select a decision" });
-  if (!["Repaired", "Replaced"].includes(vendor_decision))
+  }
+  if (!["Repaired", "Replaced"].includes(vendor_decision)) {
     return res.json({ success: false, message: "Invalid decision value" });
-  if (!vendor_decision_date || !String(vendor_decision_date).trim())
+  }
+  if (!vendor_decision_date || !String(vendor_decision_date).trim()) {
     return res.json({ success: false, message: "Please select a date" });
+  }
 
   const decisionDate = String(vendor_decision_date).trim();
-  if (!isISODate(decisionDate))
+
+  if (!isISODate(decisionDate)) {
     return res.json({
       success: false,
       message: "Invalid date format (expected YYYY-MM-DD)",
     });
+  }
 
   const newStatus = `Vendor: ${vendor_decision}`;
 
   try {
     const result = await db.query(
       `SELECT "Status", "Vendor_Sent_Date", "DeliveryDate"
-       FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+       FROM repair_app.job_data
+       WHERE "Job_Id" = $1`,
+      [jobId]
     );
     const row = result.rows[0];
+
     if (!row) return res.json({ success: false, message: "Job not found" });
 
     const sentISO = toISODateOnly(row.Vendor_Sent_Date);
     const delISO = toISODateOnly(row.DeliveryDate);
 
-    if (!sentISO)
+    if (!sentISO) {
       return res.json({
         success: false,
         message:
           "Vendor Sent Date is missing. Please use 'Send to Vendor' first.",
       });
-    if (!delISO)
+    }
+
+    if (!delISO) {
       return res.json({
         success: false,
         message:
           "Delivery Date is missing. Please ask Store to update Delivery Date first.",
       });
+    }
 
-    if (decisionDate < sentISO)
+    if (decisionDate < sentISO) {
       return res.json({
         success: false,
         message: `Decision date must be on/after Vendor Sent Date (${sentISO}).`,
       });
-    if (decisionDate > delISO)
+    }
+
+    if (decisionDate > delISO) {
       return res.json({
         success: false,
         message: `Decision date must be on/before Delivery Date (${delISO}).`,
       });
+    }
 
     const updateResult = await db.query(
-      `UPDATE job_data
-       SET "Status"               = $1,
-           "Vendor_Decision"      = $2,
+      `UPDATE repair_app.job_data
+       SET "Status" = $1,
+           "Vendor_Decision" = $2,
            "Vendor_Decision_Date" = $3
        WHERE "Job_Id" = $4`,
-      [newStatus, vendor_decision, decisionDate, jobId],
+      [newStatus, vendor_decision, decisionDate, jobId]
     );
-    if (updateResult.rowCount === 0)
+
+    if (updateResult.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("vendorDecision error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -865,24 +987,31 @@ const returnToStore = async (req, res) => {
 
   try {
     const result = await db.query(
-      `SELECT "Status" FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
+      [jobId]
     );
-    if (!result.rows[0])
+
+    if (!result.rows[0]) {
       return res.json({ success: false, message: "Job not found" });
+    }
 
     const istNow = getISTTimestamp();
+
     const updateResult = await db.query(
-      `UPDATE job_data
+      `UPDATE repair_app.job_data
        SET "Status" = 'Sent to Store',
            "Store_Sent_Date" = $1
        WHERE "Job_Id" = $2`,
-      [istNow, jobId],
+      [istNow, jobId]
     );
-    if (updateResult.rowCount === 0)
+
+    if (updateResult.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("returnToStore error:", err);
     return res.json({ success: false, message: err.message });
   }
 };
@@ -893,24 +1022,31 @@ const storeAcknowledge = async (req, res) => {
 
   try {
     const result = await db.query(
-      `SELECT "Status" FROM job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
+      [jobId]
     );
-    if (!result.rows[0])
+
+    if (!result.rows[0]) {
       return res.json({ success: false, message: "Job not found" });
+    }
 
     const istNow = getISTTimestamp();
+
     const updateResult = await db.query(
-      `UPDATE job_data
+      `UPDATE repair_app.job_data
        SET "Status" = 'Store Received',
            "Store_Received_Date" = $1
        WHERE "Job_Id" = $2`,
-      [istNow, jobId],
+      [istNow, jobId]
     );
-    if (updateResult.rowCount === 0)
+
+    if (updateResult.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
+    }
+
     return res.json({ success: true });
   } catch (err) {
+    console.error("storeAcknowledge error:", err);
     return res.json({ success: false, message: err.message });
   }
 };

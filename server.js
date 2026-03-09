@@ -34,18 +34,24 @@ app.use(
   })
 );
 
+// Health check
+app.get("/health", (req, res) => {
+  res.status(200).json({ ok: true });
+});
+
 // Routes
 app.use("/", authRoutes);
 app.use("/api/dashboard", dashboardApiRoutes);
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).send("Page not found");
+  console.log("404 Not Found:", req.method, req.originalUrl);
+  res.status(404).send(`Page not found: ${req.originalUrl}`);
 });
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error("Server error:", err.stack || err);
   res.status(500).send("Something went wrong!");
 });
 
