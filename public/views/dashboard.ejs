@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Inc.5 Repair Portal</title>
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+
+  <div id="pageLoader" class="page-loader">
+    <div class="loader-spinner"></div>
+    <p>Loading...</p>
+  </div>
+
+  <div class="dashboard-container">
+
+    <!-- ══ NAVBAR ══ -->
+    <nav class="navbar">
+      <div class="nav-brand">
+        <img src="/uploads/Inc5_nav_logo.png"
+             alt="Inc.5"
+             class="nav-brand-logo"
+             onerror="this.src='/uploads/Inc5_White.png'; this.style.height='36px';" />
+      </div>
+
+      <!-- No nav tabs — this user has nowhere else to go -->
+
+      <div class="nav-user">
+        <span class="user-info">
+          <span class="user-icon-wrap">
+            <svg class="user-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12
+                       2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0
+                       14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97
+                       1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+            </svg>
+          </span>
+          <span class="user-name-wrap">
+            <span class="user-id-text"><%= userId %></span>
+            <span class="role-badge-default"><%= role || 'No Role' %></span>
+          </span>
+        </span>
+
+        <button id="logoutBtn" class="logout-btn">
+          <svg class="logout-btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4
+                     5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+          </svg>
+          Logout
+        </button>
+      </div>
+    </nav>
+
+    <!-- ══ MAIN ══ -->
+    <main class="main-content">
+      <div class="welcome-card">
+
+        <div class="welcome-card-band"></div>
+
+        <div class="welcome-card-body">
+
+          <!-- Icon -->
+          <div class="welcome-logo-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12
+                       2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0
+                       14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97
+                       1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+            </svg>
+          </div>
+
+          <p class="welcome-eyebrow">Inc.5 Repair Portal</p>
+
+          <h1 class="welcome-title">
+            Welcome, <em><%= userId %></em>
+          </h1>
+
+          <p class="welcome-sub">
+            You are logged in successfully. Your current role does not have
+            access to additional pages in this portal.
+          </p>
+
+          <div class="welcome-divider"></div>
+
+          <!-- Info chips -->
+          <div class="welcome-info-row">
+            <div class="welcome-info-chip">
+              <span class="info-chip-label">Logged in as</span>
+              <span class="info-chip-value"><%= userId %></span>
+            </div>
+            <div class="welcome-info-chip">
+              <span class="info-chip-label">Role</span>
+              <span class="info-chip-value red"><%= role || 'No Role' %></span>
+            </div>
+          </div>
+
+          <!-- Status indicator -->
+          <div class="welcome-status">
+            <span class="status-dot"></span>
+            Session active
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Legacy elements kept hidden for JS compatibility -->
+      <div class="welcome-section">
+        <h1>Welcome <%= userId %>!</h1>
+        <p class="welcome-message">You are logged in successfully</p>
+      </div>
+    </main>
+
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

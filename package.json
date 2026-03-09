@@ -1,0 +1,22 @@
+{
+  "dependencies": {
+    "@google-cloud/cloud-sql-connector": "^1.9.1",
+    "bcrypt": "^6.0.0",
+    "body-parser": "^2.2.2",
+    "dotenv": "^17.3.1",
+    "ejs": "^4.0.1",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "google-auth-library": "^10.6.1",
+    "multer": "^2.0.2",
+    "pg": "^8.20.0",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  }
+}

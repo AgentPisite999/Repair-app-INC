@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inc.5 — Repair Portal</title>
+    <link rel="stylesheet" href="/css/login.css" />
+  </head>
+  <body>
+
+    <!-- Page Loader -->
+    <div id="pageLoader" class="page-loader">
+      <div class="loader-logo-wrap">
+        <img src="/uploads/Inc5_White.png" alt="Inc.5" />
+      </div>
+      <div class="loader-bar"></div>
+      <p>Loading...</p>
+    </div>
+
+    <div class="login-wrapper">
+
+      <!-- ── LEFT: Brand Panel ── -->
+      <div class="panel-left">
+        <div class="panel-left-content">
+
+          <div class="left-logo">
+            <img src="/uploads/Inc5_White.png" alt="Inc.5 Shoes" />
+          </div>
+
+          <div class="left-divider"></div>
+
+          <h2 class="left-headline">
+            Repair.<br /><em>Restored.</em><br />Ready.
+          </h2>
+
+          <p class="left-sub">Repair Management Portal</p>
+
+        </div>
+
+        <div class="left-tagline">
+          Shoes &nbsp;&middot;&nbsp; Bags &nbsp;&middot;&nbsp; Accessories &nbsp;&middot;&nbsp; <span>Attitude</span>
+        </div>
+      </div>
+
+      <!-- Vertical Divider -->
+      <div class="panel-divider"></div>
+
+      <!-- ── RIGHT: Login Panel ── -->
+      <div class="panel-right">
+        <div class="login-container">
+
+          <!-- Repair Portal label above card -->
+          <div class="form-logo">
+            <p class="form-portal-label">Repair Portal</p>
+          </div>
+
+          <!-- Login Card -->
+          <div class="login-box">
+            <div class="login-header">
+              <h1>Sign In</h1>
+              <p>Access your repair portal account</p>
+            </div>
+
+            <form id="loginForm" class="login-form">
+              <div class="form-group">
+                <label for="user_id">User ID</label>
+                <input
+                  type="text"
+                  id="user_id"
+                  name="user_id"
+                  placeholder="Enter your User ID"
+                  autocomplete="username"
+                  required
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="password">Password</label>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  placeholder="Enter your password"
+                  autocomplete="current-password"
+                  required
+                />
+              </div>
+
+              <div id="errorMessage" class="error-message" style="display: none"></div>
+
+              <button type="submit" class="login-btn" id="loginBtn">
+                <span class="btn-text">Sign In</span>
+                <span class="btn-loader" style="display: none"></span>
+              </button>
+            </form>
+          </div>
+
+          <div class="login-footer">
+            &copy; <%= new Date().getFullYear() %> Inc.5 &mdash; Internal Use Only
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <script src="/js/login.js"></script>
+  </body>
+</html>

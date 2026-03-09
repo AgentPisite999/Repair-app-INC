@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Creation — Inc.5 Repair Portal</title>
+  <link rel="stylesheet" href="/css/job-creation.css">
+</head>
+<body>
+
+  <div id="pageLoader" class="page-loader">
+    <div class="loader-spinner"></div>
+    <p>Loading...</p>
+  </div>
+
+  <div id="toast" class="toast hidden">
+    <div class="toast-inner"><span id="toastMessage"></span></div>
+  </div>
+
+  <div class="dashboard-container">
+
+    <!-- ══ NAVBAR ══ -->
+    <nav class="navbar">
+      <div class="nav-brand">
+        <!--
+          Inc5_nav_logo.png = white logo extracted on fully transparent background.
+          Copy to public/uploads/Inc5_nav_logo.png
+          Falls back to original white PNG if missing.
+        -->
+        <img src="/uploads/Inc5_nav_logo.png"
+             alt="Inc.5"
+             class="nav-brand-logo"
+             onerror="this.src='/uploads/Inc5_White.png'; this.style.height='36px';" />
+      </div>
+
+      <div class="nav-tabs">
+        <%
+          const normalizedRole = (role || '').toLowerCase().trim();
+          const isStore     = normalizedRole === 'store';
+          const isWarehouse = normalizedRole.includes('warehouse');
+          const isAdmin     = normalizedRole === 'admin';
+        %>
+        <% if (isStore) { %>
+          <a href="/job-creation"     class="nav-tab active">Job Creation</a>
+          <a href="/action-analytics" class="nav-tab">Action & Analytics</a>
+        <% } else if (isAdmin) { %>
+          <a href="/job-creation"     class="nav-tab active">Job Creation</a>
+          <a href="/action-analytics" class="nav-tab">Action & Analytics</a>
+          <a href="/dashboard-admin"  class="nav-tab">Dashboard</a>
+        <% } else if (isWarehouse) { %>
+          <a href="/action-analytics" class="nav-tab">Action & Analytics</a>
+        <% } %>
+      </div>
+
+      <div class="nav-user">
+        <span class="user-info">
+          <span class="user-icon-wrap">
+            <svg class="user-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12
+                       2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0
+                       14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97
+                       1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+            </svg>
+          </span>
+          <span class="user-name-wrap">
+            <span class="user-id-text"><%= userId %></span>
+            <span class="role-badge-default"><%= role || 'No Role' %></span>
+          </span>
+        </span>
+
+        <button id="logoutBtn" class="logout-btn">
+          <svg class="logout-btn-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4
+                     5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+          </svg>
+          Logout
+        </button>
+      </div>
+    </nav>
+
+    <!-- ══ MAIN ══ -->
+    <main class="main-content job-main">
+      <form id="jobForm" enctype="multipart/form-data">
+
+        <input type="hidden" id="verified_otp"         name="verified_otp"         value="">
+        <input type="hidden" id="pre_generated_job_id" name="pre_generated_job_id" value="">
+
+        <!-- ── TOP BAR ── -->
+        <div class="jc-top-bar">
+          <h1 class="job-title">
+            <svg class="title-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9
+                       2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93
+                       13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2
+                       .76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76
+                       1.58V19z"/>
+            </svg>
+            Job Creation
+          </h1>
+          <div class="topbar-sep"></div>
+          <div class="topbar-field">
+            <label for="jobType">Job Type</label>
+            <select id="jobType" name="jobType" required>
+              <option value="">Select</option>
+              <option value="Store Repair" selected>Store Repair</option>
+              <option value="Send to Warehouse">Send to Warehouse</option>
+            </select>
+          </div>
+          <div class="top-bar-messages">
+            <div id="jobError"   class="msg-error"  style="display:none;"></div>
+            <div id="jobSuccess" class="msg-success" style="display:none;"></div>
+          </div>
+          <div class="job-form-actions">
+            <button type="button" class="btn-secondary" id="resetJobBtn">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+              </svg>
+              Reset
+            </button>
+            <button type="submit" class="btn-primary" id="submitJobBtn">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+              </svg>
+              Create Job
+            </button>
+          </div>
+        </div>
+
+        <!-- ══ THREE COLUMNS ══ -->
+        <div class="jc-body">
+
+          <!-- ── COL 1: Barcode + Repair ── -->
+          <div class="jc-col">
+            <div class="step-heading">
+              <span class="step-badge">1</span>
+              <h2>Footwear Barcode</h2>
+            </div>
+
+            <div class="form-row">
+              <label for="barcode">Barcode</label>
+              <div class="input-icon-wrap">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M2 4v16h2V4H2zm4 0v16h1V4H6zm2 0v16h2V4H8zm3 0v16h1V4h-1zm2 0v16h2V4h-2zm3 0v16h1V4h-1zm2 0v16h2V4h-2z"/>
+                </svg>
+                <input type="text" id="barcode" name="barcode"
+                       placeholder="Scan or type barcode…" autocomplete="off" required>
+              </div>
+              <span class="note">Press Enter or click away to fetch item.</span>
+            </div>
+
+            <div id="itemDetailsExisting" class="status-box found-box hidden">
+              <span class="status-pill green">✓ Item Found</span>
+              <div class="form-row-inline" style="margin-top:8px;">
+                <div class="form-row">
+                  <label for="item_id">Item ID</label>
+                  <input type="text" id="item_id" name="item_id" readonly class="ro-field">
+                </div>
+                <div class="form-row">
+                  <label for="division">Division</label>
+                  <input type="text" id="division" name="division" readonly class="ro-field">
+                </div>
+              </div>
+              <div class="form-row-inline">
+                <div class="form-row">
+                  <label for="section">Section</label>
+                  <input type="text" id="section" name="section" readonly class="ro-field">
+                </div>
+                <div class="form-row">
+                  <label for="department">Department</label>
+                  <input type="text" id="department" name="department" readonly class="ro-field">
+                </div>
+              </div>
+            </div>
+
+            <input type="hidden" id="item_missing" name="item_missing" value="false">
+            <div id="itemDetailsNew" class="status-box warn-box hidden">
+              <span class="status-pill amber">⚠ Not Found – will be appended</span>
+              <div class="form-row" style="margin-top:8px;">
+                <label for="item_remarks">Remarks <span class="required-star">*</span></label>
+                <textarea id="item_remarks" name="item_remarks"
+                          placeholder="Required – add remarks for this barcode…"></textarea>
+              </div>
+            </div>
+
+            <div class="col-divider"></div>
+
+            <div class="step-heading">
+              <span class="step-badge">2</span>
+              <h2>Repair Details</h2>
+            </div>
+
+            <div class="form-row-inline">
+              <div class="form-row">
+                <label for="product_under_90">Under 90 Days</label>
+                <select id="product_under_90" name="product_under_90" required>
+                  <option value="">Select</option>
+                  <option value="Yes">Yes</option>
+                  <option value="No">No</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="delivery_date">Delivery Date</label>
+                <input type="date" id="delivery_date" name="delivery_date" required>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label for="damage_reason">Damage Reason</label>
+              <select id="damage_reason" name="damage_reason" required>
+                <option value="">Select Reason</option>
+                <% damageReasons.forEach(function(r) { %>
+                  <option value="<%= r.ReasonID %>" data-display="<%= r.ReasonID %> - <%= r.ReasonName %>">
+                    <%= r.ReasonID %> - <%= r.ReasonName %>
+                  </option>
+                <% }) %>
+                <option value="Others" data-display="Others">Others</option>
+              </select>
+            </div>
+
+            <div class="form-row hidden" id="damageOtherWrap">
+              <label for="damage_reason_other_remarks">Damage Remarks</label>
+              <textarea id="damage_reason_other_remarks" name="damage_reason_other_remarks"
+                        placeholder="Describe damage in detail…"></textarea>
+            </div>
+
+            <div class="col-spacer"></div>
+          </div>
+
+          <!-- ── COL 2: Customer ── -->
+          <div class="jc-col">
+            <div class="step-heading">
+              <span class="step-badge">3</span>
+              <h2>Customer Details</h2>
+            </div>
+
+            <div class="form-row">
+              <label for="customer_number">Customer Number</label>
+              <div class="input-icon-wrap">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36
+                           1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1
+                           1C10.61 21 3 13.39 3 4c0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2
+                           2.45.57 3.57.11.35.03.74-.24 1.02l-2.21 2.2z"/>
+                </svg>
+                <input type="text" id="customer_number" name="customer_number"
+                       placeholder="Phone number…" autocomplete="off" required>
+              </div>
+              <span class="note">Press Enter or click away to fetch customer.</span>
+            </div>
+
+            <input type="hidden" id="customer_missing" name="customer_missing" value="false">
+            <div id="customerFoundBadge"    class="status-pill green" style="display:none; margin-bottom:8px;">✓ Customer Found</div>
+            <div id="customerNotFoundBadge" class="status-pill amber" style="display:none; margin-bottom:8px;">⚠ New – will be saved</div>
+
+            <div class="form-row">
+              <label for="customer_name">Customer Name</label>
+              <input type="text" id="customer_name" name="customer_name" placeholder="Full name">
+            </div>
+
+            <div class="form-row-inline">
+              <div class="form-row">
+                <label for="email">Email</label>
+                <input type="text" id="email" name="email" placeholder="Email address">
+              </div>
+              <div class="form-row">
+                <label for="pincode">Pincode</label>
+                <input type="text" id="pincode" name="pincode" placeholder="Pincode">
+              </div>
+            </div>
+
+            <div class="form-row-inline">
+              <div class="form-row">
+                <label for="city">City</label>
+                <input type="text" id="city" name="city" placeholder="City">
+              </div>
+              <div class="form-row">
+                <label for="state">State</label>
+                <input type="text" id="state" name="state" placeholder="State">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label for="address">Address</label>
+              <textarea id="address" name="address" placeholder="Full address…"></textarea>
+            </div>
+
+            <div class="form-row-inline">
+              <div class="form-row">
+                <label for="whatsapp_ok">WhatsApp OK</label>
+                <select id="whatsapp_ok" name="whatsapp_ok">
+                  <option value="True">True</option>
+                  <option value="False">False</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="sms_ok">SMS OK</label>
+                <select id="sms_ok" name="sms_ok">
+                  <option value="True">True</option>
+                  <option value="False">False</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="customerRemarksWrapper" class="form-row hidden">
+              <label for="customer_remarks">Remarks <span class="required-star">*</span></label>
+              <textarea id="customer_remarks" name="customer_remarks"
+                        placeholder="Required – add remarks for new customer…"></textarea>
+            </div>
+          </div>
+
+          <!-- ── COL 3: Warehouse (conditional) + Additional ── -->
+          <div class="jc-col">
+
+            <!-- Warehouse section — only shown for Send to Warehouse job type -->
+            <div id="warehouseSection" class="hidden">
+              <div class="step-heading">
+                <span class="step-badge">4</span>
+                <h2>Warehouse Details</h2>
+              </div>
+
+              <div class="form-row">
+                <label for="warehouse_id">Select Warehouse</label>
+                <select id="warehouse_id" name="warehouse_id">
+                  <option value="">Select Warehouse</option>
+                  <% warehouses.forEach(function(w) { %>
+                    <option value="<%= w.WhID %>" data-name="<%= w.WarehouseName %>">
+                      <%= w.WhID %> - <%= w.WarehouseName %>
+                    </option>
+                  <% }) %>
+                </select>
+                <input type="hidden" id="warehouse_name" name="warehouse_name">
+              </div>
+
+              <div class="form-row">
+                <label for="courier_name">Select Courier</label>
+                <select id="courier_name" name="courier_name">
+                  <option value="">Select Courier</option>
+                  <% couriers.forEach(function(c) { %>
+                    <option value="<%= c.CourierName %>"><%= c.CourierName %></option>
+                  <% }) %>
+                </select>
+              </div>
+
+              <div class="form-row-inline">
+                <div class="form-row">
+                  <label for="awb">AWB No.</label>
+                  <input type="text" id="awb" name="awb" placeholder="AWB number">
+                </div>
+                <div class="form-row">
+                  <label for="dispatch_date">Dispatch Date</label>
+                  <input type="date" id="dispatch_date" name="dispatch_date">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <label for="warehouse_remarks">Remarks</label>
+                <textarea id="warehouse_remarks" name="warehouse_remarks" placeholder="Warehouse remarks…"></textarea>
+              </div>
+
+              <div class="form-row">
+                <label>WH Attachment</label>
+                <div class="attach-options">
+                  <label class="attach-btn" for="wh_attachment">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9
+                               2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                    </svg>
+                    Choose File
+                    <input type="file" id="wh_attachment" name="wh_attachment"
+                           accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx">
+                  </label>
+                  <button type="button" class="attach-btn camera-btn" id="whCameraBtn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 15.2A3.2 3.2 0 0 1 8.8 12 3.2 3.2 0 0 1 12 8.8 3.2 3.2
+                               0 0 1 15.2 12 3.2 3.2 0 0 1 12 15.2M9 2L7.17 4H4c-1.1 0-2 .9-2
+                               2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9z"/>
+                    </svg>
+                    Camera
+                    <input type="file" id="wh_camera" accept="image/*" style="display:none;">
+                  </button>
+                </div>
+                <div id="whPreviewWrap" class="preview-wrap hidden">
+                  <img id="whPreview" class="file-preview-img" src="" alt="WH Preview">
+                  <span id="whFileLabel" class="file-name-label">No file chosen</span>
+                  <button type="button" class="clear-attach-btn" id="clearWhAttach">✕</button>
+                </div>
+              </div>
+
+              <div class="col-divider"></div>
+            </div>
+
+            <!-- Additional Info — always visible -->
+            <div class="step-heading">
+              <span class="step-badge" id="additionalStepBadge">4</span>
+              <h2>Additional Info</h2>
+            </div>
+
+            <div class="form-row">
+              <label>Attachment</label>
+              <div class="attach-options">
+                <label class="attach-btn" for="attachment">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9
+                             2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                  </svg>
+                  Choose File
+                  <input type="file" id="attachment" name="attachment"
+                         accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx">
+                </label>
+                <button type="button" class="attach-btn camera-btn" id="mainCameraBtn">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 15.2A3.2 3.2 0 0 1 8.8 12 3.2 3.2 0 0 1 12 8.8 3.2 3.2
+                             0 0 1 15.2 12 3.2 3.2 0 0 1 12 15.2M9 2L7.17 4H4c-1.1 0-2 .9-2
+                             2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9z"/>
+                  </svg>
+                  Camera
+                  <input type="file" id="main_camera" accept="image/*" style="display:none;">
+                </button>
+              </div>
+              <div id="attachPreviewWrap" class="preview-wrap hidden">
+                <img id="attachPreview" class="file-preview-img" src="" alt="Preview">
+                <span id="fileLabel" class="file-name-label">No file chosen</span>
+                <button type="button" class="clear-attach-btn" id="clearAttach">✕</button>
+              </div>
+            </div>
+
+            <!-- Comments: fixed reasonable height, not giant -->
+            <div class="form-row comments-grow">
+              <label for="comments">Comments</label>
+              <textarea id="comments" name="comments"
+                        placeholder="Any additional comments…"></textarea>
+            </div>
+
+            <div class="col-divider"></div>
+
+            <div class="form-bottom-actions">
+              <button type="button" class="btn-secondary btn-lg" id="resetJobBtn2">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+                </svg>
+                Reset
+              </button>
+              <button type="submit" class="btn-primary btn-lg" id="submitJobBtn2">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                Create Job
+              </button>
+            </div>
+
+          </div>
+        </div><!-- /jc-body -->
+      </form>
+    </main>
+  </div>
+
+  <!-- OTP MODAL -->
+  <div id="otpModal" class="otp-modal hidden">
+    <div class="otp-modal-box">
+      <div class="otp-modal-header">
+        <span>🔐 OTP Verification</span>
+        <button type="button" id="closeOtpModal" class="otp-modal-close">✕</button>
+      </div>
+      <div class="otp-modal-body">
+        <p class="otp-sent-text">OTP sent to <strong id="otpPhoneDisplay"></strong></p>
+        <div class="otp-timer-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span id="otpTimer">05:00</span>
+        </div>
+        <div class="otp-input-wrap">
+          <input type="text" id="otpModalInput" maxlength="6"
+                 placeholder="● ● ● ● ● ●" autocomplete="off">
+        </div>
+        <div id="otpVerifyStatus" class="otp-verify-status"></div>
+        <div class="otp-modal-actions">
+          <button type="button" id="resendOtpBtn" class="btn-secondary" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+            </svg>
+            Resend OTP
+          </button>
+          <button type="button" id="confirmCreateJobBtn" class="btn-primary" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+            </svg>
+            Create Job
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WEBCAM MODAL -->
+  <div id="webcamModal" class="webcam-modal hidden">
+    <div class="webcam-box">
+      <div class="webcam-header">
+        <span>📷 Capture Photo</span>
+        <button type="button" id="closeWebcam" class="webcam-close">✕</button>
+      </div>
+      <div class="webcam-media-wrap">
+        <video id="webcamVideo" autoplay playsinline></video>
+        <canvas id="webcamCanvas" style="display:none;"></canvas>
+      </div>
+      <div class="webcam-actions">
+        <button type="button" id="snapBtn" class="btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 15.2A3.2 3.2 0 0 1 8.8 12 3.2 3.2 0 0 1 12 8.8 3.2 3.2 0 0 1
+                     15.2 12 3.2 3.2 0 0 1 12 15.2M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0
+                     1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9z"/>
+          </svg>
+          Capture
+        </button>
+        <button type="button" id="retakeBtn"   class="btn-secondary hidden">↩ Retake</button>
+        <button type="button" id="usePhotoBtn" class="btn-primary    hidden">✓ Use Photo</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+  <script src="/js/job-creation.js"></script>
+</body>
+</html>
