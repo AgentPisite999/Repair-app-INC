@@ -1,4 +1,71 @@
 const { db, getISTTimestamp } = require("../config/database");
+const https = require("https");
+const http = require("http");
+const { URL } = require("url");
+
+// ── SMS config (same as jobController) ──
+const SMS_URL = (process.env.SMS_URL || "").trim();
+const SMS_AUTHTOKEN = (process.env.SMS_AUTHTOKEN || "").trim();
+const SMS_SENDERID = (process.env.SMS_SENDERID || "").trim();
+const SMS_PE_ID = (process.env.SMS_PE_ID || "").trim();
+const SMS_TEMPLATE_ID_READY = (process.env.SMS_TEMPLATE_ID_READY || "").trim();
+
+const normalizeMobile = (mobile) => {
+  const m = mobile.replace(/\D/g, "");
+  if (m.length === 10) return "91" + m;
+  if (m.length === 12 && m.startsWith("91")) return m;
+  return null;
+};
+
+const sendSMS = (mobile, message, templateId) => {
+  return new Promise((resolve, reject) => {
+    if (!SMS_URL || !SMS_AUTHTOKEN) {
+      console.warn("SMS not configured. Skipping SMS send.");
+      return resolve("SMS_NOT_CONFIGURED");
+    }
+    try {
+      const url = new URL(SMS_URL);
+      url.searchParams.set("authtoken", SMS_AUTHTOKEN);
+      url.searchParams.set("to", mobile);
+      url.searchParams.set("from", SMS_SENDERID);
+      url.searchParams.set("text", message);
+      url.searchParams.set("peid", SMS_PE_ID);
+      url.searchParams.set("templateid", templateId);
+
+      console.log("\n====== SMS DEBUG (Product Ready) ======");
+      console.log("TO:", mobile);
+      console.log("templateid:", templateId);
+      console.log("MESSAGE:", message);
+      console.log("========================================\n");
+
+      const protocol = url.protocol === "https:" ? https : http;
+      protocol.get(url.toString(), (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          console.log("SMS API Response:", data);
+          resolve(data);
+        });
+      }).on("error", (err) => {
+        console.error("SMS send error:", err.message);
+        reject(err);
+      });
+    } catch (err) {
+      console.error("SMS URL parse error:", err.message);
+      reject(err);
+    }
+  });
+};
+
+const buildProductReadySMS = (jobId) => {
+  return (
+    `Your product with Job ID ${jobId} is ready for pickup. ` +
+    `Please collect it from store. ` +
+    `Thank you for choosing INC5.`
+  );
+};
+
+// ─────────────────────────────────────────────
 
 const extractWhIdFromRole = (role) => {
   if (!role) return null;
@@ -201,35 +268,14 @@ const adminUpdateJob = async (req, res) => {
   }
 
   const allowed = new Set([
-    "CustomerNumber",
-    "CustomerName",
-    "Store_Id",
-    "ITEM_ID",
-    "ProductUnder90Days",
-    "DeliveryDate",
-    "Status",
-    "Ticket_Closing_Date",
-    "Closing_Ticket_Remarks",
-    "WarehouseID",
-    "WarehouseName",
-    "CourierName",
-    "AWB",
-    "DispatchDate",
-    "WarehouseRemarks",
-    "Warehouse_Receive_Date",
-    "Warehouse_Sent_Date",
-    "Vendor_Name",
-    "Vendor_Awb",
-    "Gate_Pass_No",
-    "Vendor_Sent_Date",
-    "Vendor_Decision",
-    "Vendor_Decision_Date",
-    "Store_Sent_Date",
-    "Store_Received_Date",
-    "Merchandise_Decision",
-    "Merchandise_Action",
-    "Return_Store_AWB",
-    "Return_Store_Remarks",
+    "CustomerNumber", "CustomerName", "Store_Id", "ITEM_ID",
+    "ProductUnder90Days", "DeliveryDate", "Status", "Ticket_Closing_Date",
+    "Closing_Ticket_Remarks", "WarehouseID", "WarehouseName", "CourierName",
+    "AWB", "DispatchDate", "WarehouseRemarks", "Warehouse_Receive_Date",
+    "Warehouse_Sent_Date", "Vendor_Name", "Vendor_Awb", "Gate_Pass_No",
+    "Vendor_Sent_Date", "Vendor_Decision", "Vendor_Decision_Date",
+    "Store_Sent_Date", "Store_Received_Date", "Merchandise_Decision",
+    "Merchandise_Action", "Return_Store_AWB", "Return_Store_Remarks",
   ]);
 
   const keys = Object.keys(updates).filter((k) => allowed.has(k));
@@ -253,20 +299,11 @@ const adminUpdateJob = async (req, res) => {
     for (const k of keys) {
       const oldV = norm(row[k]);
       const newV = norm(updates[k]);
-
       if (oldV === newV) continue;
 
-      if (
-        k === "DeliveryDate" ||
-        k === "DispatchDate" ||
-        k === "Vendor_Sent_Date" ||
-        k === "Vendor_Decision_Date"
-      ) {
+      if (["DeliveryDate", "DispatchDate", "Vendor_Sent_Date", "Vendor_Decision_Date"].includes(k)) {
         if (newV && !isISODate(newV)) {
-          return res.json({
-            success: false,
-            message: `${k} must be YYYY-MM-DD`,
-          });
+          return res.json({ success: false, message: `${k} must be YYYY-MM-DD` });
         }
       }
 
@@ -328,33 +365,22 @@ const getAttachment = async (req, res) => {
   if (!jobId) {
     return res.status(400).json({ success: false, message: "Job ID required" });
   }
-
   try {
     const result = await db.query(
       `SELECT "Attachment" FROM repair_app.job_data WHERE "Job_Id" = $1`,
       [jobId],
     );
     const row = result.rows[0];
-
     if (!row || !row.Attachment) {
       return res.status(404).json({ success: false, message: "No attachment" });
     }
-
     let att;
-    try {
-      att = JSON.parse(row.Attachment);
-    } catch (_) {
-      return res
-        .status(500)
-        .json({ success: false, message: "Invalid attachment" });
+    try { att = JSON.parse(row.Attachment); } catch (_) {
+      return res.status(500).json({ success: false, message: "Invalid attachment" });
     }
-
     if (!att || !att.buffer) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No attachment data" });
+      return res.status(404).json({ success: false, message: "No attachment data" });
     }
-
     const buf = Buffer.from(att.buffer, "base64");
     res.set({
       "Content-Type": att.mimetype || "application/octet-stream",
@@ -370,35 +396,22 @@ const getAttachment = async (req, res) => {
 
 const getWhAttachment = async (req, res) => {
   const { jobId } = req.params;
-
   try {
     const result = await db.query(
-      `SELECT "WarehouseAttachment"
-       FROM repair_app.job_data
-       WHERE "Job_Id" = $1`,
+      `SELECT "WarehouseAttachment" FROM repair_app.job_data WHERE "Job_Id" = $1`,
       [jobId],
     );
     const row = result.rows[0];
-
     if (!row || !row.WarehouseAttachment) {
       return res.status(404).json({ success: false, message: "No attachment" });
     }
-
     let att;
-    try {
-      att = JSON.parse(row.WarehouseAttachment);
-    } catch (_) {
-      return res
-        .status(500)
-        .json({ success: false, message: "Invalid attachment" });
+    try { att = JSON.parse(row.WarehouseAttachment); } catch (_) {
+      return res.status(500).json({ success: false, message: "Invalid attachment" });
     }
-
     if (!att || !att.buffer) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No attachment data" });
+      return res.status(404).json({ success: false, message: "No attachment data" });
     }
-
     const buf = Buffer.from(att.buffer, "base64");
     res.set({
       "Content-Type": att.mimetype || "application/octet-stream",
@@ -414,23 +427,17 @@ const getWhAttachment = async (req, res) => {
 
 const updateDeliveryDate = async (req, res) => {
   const { jobId, deliveryDate } = req.body;
-
   if (!jobId || !deliveryDate) {
     return res.json({ success: false, message: "Missing fields" });
   }
-
   try {
     const result = await db.query(
-      `UPDATE repair_app.job_data
-       SET "DeliveryDate" = $1
-       WHERE "Job_Id" = $2`,
+      `UPDATE repair_app.job_data SET "DeliveryDate" = $1 WHERE "Job_Id" = $2`,
       [deliveryDate, jobId],
     );
-
     if (result.rowCount === 0) {
       return res.json({ success: false, message: "Job not found" });
     }
-
     return res.json({ success: true });
   } catch (err) {
     console.error("updateDeliveryDate error:", err);
@@ -439,46 +446,26 @@ const updateDeliveryDate = async (req, res) => {
 };
 
 const closeTicket = async (req, res) => {
-  const {
-    jobId,
-    verified_otp,
-    closing_remarks,
-    merchandise_decision,
-    merchandise_action,
-  } = req.body;
+  const { jobId, verified_otp, closing_remarks, merchandise_decision, merchandise_action } = req.body;
 
   if (!jobId) return res.json({ success: false, message: "Missing Job ID" });
-  if (!verified_otp) {
-    return res.json({ success: false, message: "OTP verification required" });
-  }
+  if (!verified_otp) return res.json({ success: false, message: "OTP verification required" });
   if (!closing_remarks || !closing_remarks.trim()) {
-    return res.json({
-      success: false,
-      message: "Closing remarks are required",
-    });
+    return res.json({ success: false, message: "Closing remarks are required" });
   }
   if (!merchandise_decision || !merchandise_decision.trim()) {
-    return res.json({
-      success: false,
-      message: "Merchandise Decision is required",
-    });
+    return res.json({ success: false, message: "Merchandise Decision is required" });
   }
   if (!merchandise_action || !merchandise_action.trim()) {
-    return res.json({
-      success: false,
-      message: "Merchandise Action is required",
-    });
+    return res.json({ success: false, message: "Merchandise Action is required" });
   }
 
   try {
     const jobResult = await db.query(
-      `SELECT "Status", "CustomerNumber"
-       FROM repair_app.job_data
-       WHERE "Job_Id" = $1`,
+      `SELECT "Status", "CustomerNumber" FROM repair_app.job_data WHERE "Job_Id" = $1`,
       [jobId],
     );
     const row = jobResult.rows[0];
-
     if (!row) return res.json({ success: false, message: "Job not found" });
     if ((row.Status || "").toLowerCase() === "closed") {
       return res.json({ success: false, message: "Ticket already closed" });
@@ -486,31 +473,20 @@ const closeTicket = async (req, res) => {
 
     const phone = (row.CustomerNumber || "").trim();
     if (!phone) {
-      return res.json({
-        success: false,
-        message: "No customer phone on this job",
-      });
+      return res.json({ success: false, message: "No customer phone on this job" });
     }
 
     const istNow = getISTTimestamp();
-
     const otpResult = await db.query(
-      `SELECT otp, job_id
-       FROM repair_app.otp_store
+      `SELECT otp, job_id FROM repair_app.otp_store
        WHERE phone = $1 AND job_id = $2 AND expires_at > $3
-       ORDER BY created_at DESC
-       LIMIT 1`,
+       ORDER BY created_at DESC LIMIT 1`,
       [phone, jobId, istNow],
     );
     const otpRow = otpResult.rows[0];
-
     if (!otpRow) {
-      return res.json({
-        success: false,
-        message: "OTP expired or not found. Please resend.",
-      });
+      return res.json({ success: false, message: "OTP expired or not found. Please resend." });
     }
-
     if (otpRow.otp !== verified_otp.trim()) {
       return res.json({ success: false, message: "Invalid OTP" });
     }
@@ -523,13 +499,7 @@ const closeTicket = async (req, res) => {
            "Merchandise_Decision" = $3,
            "Merchandise_Action" = $4
        WHERE "Job_Id" = $5`,
-      [
-        istNow,
-        closing_remarks.trim(),
-        merchandise_decision.trim(),
-        merchandise_action.trim(),
-        jobId,
-      ],
+      [istNow, closing_remarks.trim(), merchandise_decision.trim(), merchandise_action.trim(), jobId],
     );
 
     if (updateResult.rowCount === 0) {
@@ -549,22 +519,11 @@ const closeTicket = async (req, res) => {
 };
 
 const saveWarehouseDraft = async (req, res) => {
-  const {
-    jobId,
-    warehouse_id,
-    warehouse_name,
-    courier_name,
-    awb,
-    dispatch_date,
-    warehouse_remarks,
-  } = req.body;
-
+  const { jobId, warehouse_id, warehouse_name, courier_name, awb, dispatch_date, warehouse_remarks } = req.body;
   const whFile = req.file || null;
 
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!warehouse_id) {
-    return res.json({ success: false, message: "Please select a warehouse" });
-  }
+  if (!warehouse_id) return res.json({ success: false, message: "Please select a warehouse" });
 
   try {
     const result = await db.query(
@@ -572,14 +531,9 @@ const saveWarehouseDraft = async (req, res) => {
       [jobId],
     );
     const row = result.rows[0];
-
     if (!row) return res.json({ success: false, message: "Job not found" });
-
     if ((row.Status || "").toLowerCase() === "closed") {
-      return res.json({
-        success: false,
-        message: "Ticket is closed. Draft not allowed.",
-      });
+      return res.json({ success: false, message: "Ticket is closed. Draft not allowed." });
     }
 
     let whAttJson = null;
@@ -593,42 +547,22 @@ const saveWarehouseDraft = async (req, res) => {
     }
 
     const setClauses = [
-      `"WarehouseID" = NULL`,
-      `"WarehouseName" = $1`,
-      `"CourierName" = $2`,
-      `"AWB" = $3`,
-      `"DispatchDate" = $4`,
-      `"WarehouseRemarks" = $5`,
+      `"WarehouseID" = NULL`, `"WarehouseName" = $1`, `"CourierName" = $2`,
+      `"AWB" = $3`, `"DispatchDate" = $4`, `"WarehouseRemarks" = $5`,
     ];
-
     const vals = [
-      (warehouse_name || "").trim(),
-      (courier_name || "").trim(),
-      (awb || "").trim(),
-      dispatch_date || "",
-      (warehouse_remarks || "").trim(),
+      (warehouse_name || "").trim(), (courier_name || "").trim(),
+      (awb || "").trim(), dispatch_date || "", (warehouse_remarks || "").trim(),
     ];
-
     let paramIndex = 6;
-
-    if (whFile) {
-      setClauses.push(`"WarehouseAttachment" = $${paramIndex++}`);
-      vals.push(whAttJson);
-    }
-
+    if (whFile) { setClauses.push(`"WarehouseAttachment" = $${paramIndex++}`); vals.push(whAttJson); }
     vals.push(jobId);
 
     const updateResult = await db.query(
-      `UPDATE repair_app.job_data
-       SET ${setClauses.join(", ")}
-       WHERE "Job_Id" = $${paramIndex}`,
+      `UPDATE repair_app.job_data SET ${setClauses.join(", ")} WHERE "Job_Id" = $${paramIndex}`,
       vals,
     );
-
-    if (updateResult.rowCount === 0) {
-      return res.json({ success: false, message: "Job not found" });
-    }
-
+    if (updateResult.rowCount === 0) return res.json({ success: false, message: "Job not found" });
     return res.json({ success: true });
   } catch (err) {
     console.error("saveWarehouseDraft error:", err);
@@ -637,22 +571,11 @@ const saveWarehouseDraft = async (req, res) => {
 };
 
 const transferToWarehouse = async (req, res) => {
-  const {
-    jobId,
-    warehouse_id,
-    warehouse_name,
-    courier_name,
-    awb,
-    dispatch_date,
-    warehouse_remarks,
-  } = req.body;
-
+  const { jobId, warehouse_id, warehouse_name, courier_name, awb, dispatch_date, warehouse_remarks } = req.body;
   const whFile = req.file || null;
 
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!warehouse_id) {
-    return res.json({ success: false, message: "Please select a warehouse" });
-  }
+  if (!warehouse_id) return res.json({ success: false, message: "Please select a warehouse" });
 
   try {
     const result = await db.query(
@@ -668,54 +591,29 @@ const transferToWarehouse = async (req, res) => {
     let whAttJson = null;
     if (whFile) {
       whAttJson = JSON.stringify({
-        originalname: whFile.originalname,
-        mimetype: whFile.mimetype,
-        size: whFile.size,
-        buffer: whFile.buffer ? whFile.buffer.toString("base64") : null,
+        originalname: whFile.originalname, mimetype: whFile.mimetype,
+        size: whFile.size, buffer: whFile.buffer ? whFile.buffer.toString("base64") : null,
       });
     }
 
     const setClauses = [
-      `"WarehouseID" = $1`,
-      `"WarehouseName" = $2`,
-      `"CourierName" = $3`,
-      `"AWB" = $4`,
-      `"DispatchDate" = $5`,
-      `"WarehouseRemarks" = $6`,
-      `"Status" = 'Sent to Warehouse'`,
-      `"Warehouse_Sent_Date" = $7`,
+      `"WarehouseID" = $1`, `"WarehouseName" = $2`, `"CourierName" = $3`,
+      `"AWB" = $4`, `"DispatchDate" = $5`, `"WarehouseRemarks" = $6`,
+      `"Status" = 'Sent to Warehouse'`, `"Warehouse_Sent_Date" = $7`,
     ];
-
     const vals = [
-      whIdClean,
-      (warehouse_name || "").trim(),
-      (courier_name || "").trim(),
-      (awb || "").trim(),
-      dispatch_date || "",
-      (warehouse_remarks || "").trim(),
-      istNow,
+      whIdClean, (warehouse_name || "").trim(), (courier_name || "").trim(),
+      (awb || "").trim(), dispatch_date || "", (warehouse_remarks || "").trim(), istNow,
     ];
-
     let paramIndex = 8;
-
-    if (whFile) {
-      setClauses.push(`"WarehouseAttachment" = $${paramIndex++}`);
-      vals.push(whAttJson);
-    }
-
+    if (whFile) { setClauses.push(`"WarehouseAttachment" = $${paramIndex++}`); vals.push(whAttJson); }
     vals.push(jobId);
 
     const updateResult = await db.query(
-      `UPDATE repair_app.job_data
-       SET ${setClauses.join(", ")}
-       WHERE "Job_Id" = $${paramIndex}`,
+      `UPDATE repair_app.job_data SET ${setClauses.join(", ")} WHERE "Job_Id" = $${paramIndex}`,
       vals,
     );
-
-    if (updateResult.rowCount === 0) {
-      return res.json({ success: false, message: "Job not found" });
-    }
-
+    if (updateResult.rowCount === 0) return res.json({ success: false, message: "Job not found" });
     return res.json({ success: true });
   } catch (err) {
     console.error("transferToWarehouse error:", err);
@@ -726,31 +624,17 @@ const transferToWarehouse = async (req, res) => {
 const warehouseAcknowledge = async (req, res) => {
   const { jobId } = req.body;
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-
   try {
     const result = await db.query(
-      `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId],
+      `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`, [jobId],
     );
-
-    if (!result.rows[0]) {
-      return res.json({ success: false, message: "Job not found" });
-    }
-
+    if (!result.rows[0]) return res.json({ success: false, message: "Job not found" });
     const istNow = getISTTimestamp();
-
     const updateResult = await db.query(
-      `UPDATE repair_app.job_data
-       SET "Status" = 'Warehouse Received',
-           "Warehouse_Receive_Date" = $1
-       WHERE "Job_Id" = $2`,
+      `UPDATE repair_app.job_data SET "Status" = 'Warehouse Received', "Warehouse_Receive_Date" = $1 WHERE "Job_Id" = $2`,
       [istNow, jobId],
     );
-
-    if (updateResult.rowCount === 0) {
-      return res.json({ success: false, message: "Job not found" });
-    }
-
+    if (updateResult.rowCount === 0) return res.json({ success: false, message: "Job not found" });
     return res.json({ success: true });
   } catch (err) {
     console.error("warehouseAcknowledge error:", err);
@@ -759,76 +643,32 @@ const warehouseAcknowledge = async (req, res) => {
 };
 
 const saveVendorDraft = async (req, res) => {
-  const { jobId, vendor_name, gate_pass_no, vendor_sent_date, vendor_awb } =
-    req.body;
-
+  const { jobId, vendor_name, gate_pass_no, vendor_sent_date, vendor_awb } = req.body;
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!vendor_name) {
-    return res.json({ success: false, message: "Please select a vendor" });
-  }
-
+  if (!vendor_name) return res.json({ success: false, message: "Please select a vendor" });
   const draftDate = (vendor_sent_date || "").trim();
-
   try {
     const result = await db.query(
-      `SELECT "Status", "Warehouse_Receive_Date", "DeliveryDate"
-       FROM repair_app.job_data
-       WHERE "Job_Id" = $1`,
+      `SELECT "Status", "Warehouse_Receive_Date", "DeliveryDate" FROM repair_app.job_data WHERE "Job_Id" = $1`,
       [jobId],
     );
     const row = result.rows[0];
-
     if (!row) return res.json({ success: false, message: "Job not found" });
-
-    const st = (row.Status || "").toLowerCase().trim();
-    if (st === "closed") {
+    if ((row.Status || "").toLowerCase().trim() === "closed") {
       return res.json({ success: false, message: "Ticket is closed." });
     }
-
     const recvISO = toISODateOnly(row.Warehouse_Receive_Date);
     const delISO = toISODateOnly(row.DeliveryDate);
-
     if (draftDate) {
-      if (!isISODate(draftDate)) {
-        return res.json({
-          success: false,
-          message: "Invalid date format (expected YYYY-MM-DD)",
-        });
-      }
-      if (recvISO && draftDate < recvISO) {
-        return res.json({
-          success: false,
-          message: `Date must be on/after Warehouse Receive Date (${recvISO}).`,
-        });
-      }
-      if (delISO && draftDate > delISO) {
-        return res.json({
-          success: false,
-          message: `Date must be on/before Delivery Date (${delISO}).`,
-        });
-      }
+      if (!isISODate(draftDate)) return res.json({ success: false, message: "Invalid date format (expected YYYY-MM-DD)" });
+      if (recvISO && draftDate < recvISO) return res.json({ success: false, message: `Date must be on/after Warehouse Receive Date (${recvISO}).` });
+      if (delISO && draftDate > delISO) return res.json({ success: false, message: `Date must be on/before Delivery Date (${delISO}).` });
     }
-
     const updateResult = await db.query(
-      `UPDATE repair_app.job_data
-       SET "Vendor_Name" = $1,
-           "Gate_Pass_No" = $2,
-           "Vendor_Sent_Date" = $3,
-           "Vendor_Awb" = $4
-       WHERE "Job_Id" = $5`,
-      [
-        (vendor_name || "").trim(),
-        (gate_pass_no || "").trim(),
-        draftDate || "",
-        (vendor_awb || "").trim(),
-        jobId,
-      ],
+      `UPDATE repair_app.job_data SET "Vendor_Name" = $1, "Gate_Pass_No" = $2, "Vendor_Sent_Date" = $3, "Vendor_Awb" = $4 WHERE "Job_Id" = $5`,
+      [(vendor_name || "").trim(), (gate_pass_no || "").trim(), draftDate || "", (vendor_awb || "").trim(), jobId],
     );
-
-    if (updateResult.rowCount === 0) {
-      return res.json({ success: false, message: "Job not found" });
-    }
-
+    if (updateResult.rowCount === 0) return res.json({ success: false, message: "Job not found" });
     return res.json({ success: true });
   } catch (err) {
     console.error("saveVendorDraft error:", err);
@@ -837,91 +677,34 @@ const saveVendorDraft = async (req, res) => {
 };
 
 const sendToVendor = async (req, res) => {
-  const { jobId, vendor_name, gate_pass_no, vendor_sent_date, vendor_awb } =
-    req.body;
-
+  const { jobId, vendor_name, gate_pass_no, vendor_sent_date, vendor_awb } = req.body;
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!vendor_name) {
-    return res.json({ success: false, message: "Please select a vendor" });
-  }
+  if (!vendor_name) return res.json({ success: false, message: "Please select a vendor" });
   if (!vendor_sent_date || !String(vendor_sent_date).trim()) {
     return res.json({ success: false, message: "Please select a date" });
   }
-
   const sentDate = String(vendor_sent_date).trim();
-
-  if (!isISODate(sentDate)) {
-    return res.json({
-      success: false,
-      message: "Invalid date format (expected YYYY-MM-DD)",
-    });
-  }
+  if (!isISODate(sentDate)) return res.json({ success: false, message: "Invalid date format (expected YYYY-MM-DD)" });
 
   try {
     const result = await db.query(
-      `SELECT "Status", "Warehouse_Receive_Date", "DeliveryDate"
-       FROM repair_app.job_data
-       WHERE "Job_Id" = $1`,
+      `SELECT "Status", "Warehouse_Receive_Date", "DeliveryDate" FROM repair_app.job_data WHERE "Job_Id" = $1`,
       [jobId],
     );
     const row = result.rows[0];
-
     if (!row) return res.json({ success: false, message: "Job not found" });
-
     const recvISO = toISODateOnly(row.Warehouse_Receive_Date);
     const delISO = toISODateOnly(row.DeliveryDate);
-
-    if (!recvISO) {
-      return res.json({
-        success: false,
-        message:
-          "Warehouse Receive Date is missing. Please Acknowledge & Receive first.",
-      });
-    }
-
-    if (!delISO) {
-      return res.json({
-        success: false,
-        message:
-          "Delivery Date is missing. Please ask Store to update Delivery Date first.",
-      });
-    }
-
-    if (sentDate < recvISO) {
-      return res.json({
-        success: false,
-        message: `Date must be on/after Warehouse Receive Date (${recvISO}).`,
-      });
-    }
-
-    if (sentDate > delISO) {
-      return res.json({
-        success: false,
-        message: `Date must be on/before Delivery Date (${delISO}).`,
-      });
-    }
+    if (!recvISO) return res.json({ success: false, message: "Warehouse Receive Date is missing." });
+    if (!delISO) return res.json({ success: false, message: "Delivery Date is missing." });
+    if (sentDate < recvISO) return res.json({ success: false, message: `Date must be on/after Warehouse Receive Date (${recvISO}).` });
+    if (sentDate > delISO) return res.json({ success: false, message: `Date must be on/before Delivery Date (${delISO}).` });
 
     const updateResult = await db.query(
-      `UPDATE repair_app.job_data
-       SET "Status" = 'Sent to Vendor',
-           "Vendor_Name" = $1,
-           "Gate_Pass_No" = $2,
-           "Vendor_Sent_Date" = $3,
-           "Vendor_Awb" = $4
-       WHERE "Job_Id" = $5`,
-      [
-        (vendor_name || "").trim(),
-        (gate_pass_no || "").trim(),
-        sentDate,
-        (vendor_awb || "").trim(),
-        jobId,
-      ],
+      `UPDATE repair_app.job_data SET "Status" = 'Sent to Vendor', "Vendor_Name" = $1, "Gate_Pass_No" = $2, "Vendor_Sent_Date" = $3, "Vendor_Awb" = $4 WHERE "Job_Id" = $5`,
+      [(vendor_name || "").trim(), (gate_pass_no || "").trim(), sentDate, (vendor_awb || "").trim(), jobId],
     );
-
-    if (updateResult.rowCount === 0) {
-      return res.json({ success: false, message: "Job not found" });
-    }
-
+    if (updateResult.rowCount === 0) return res.json({ success: false, message: "Job not found" });
     return res.json({ success: true });
   } catch (err) {
     console.error("sendToVendor error:", err);
@@ -931,86 +714,33 @@ const sendToVendor = async (req, res) => {
 
 const vendorDecision = async (req, res) => {
   const { jobId, vendor_decision, vendor_decision_date } = req.body;
-
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-  if (!vendor_decision) {
-    return res.json({ success: false, message: "Please select a decision" });
-  }
-  if (!["Repaired", "Replaced"].includes(vendor_decision)) {
-    return res.json({ success: false, message: "Invalid decision value" });
-  }
-  if (!vendor_decision_date || !String(vendor_decision_date).trim()) {
-    return res.json({ success: false, message: "Please select a date" });
-  }
-
+  if (!vendor_decision) return res.json({ success: false, message: "Please select a decision" });
+  if (!["Repaired", "Replaced"].includes(vendor_decision)) return res.json({ success: false, message: "Invalid decision value" });
+  if (!vendor_decision_date || !String(vendor_decision_date).trim()) return res.json({ success: false, message: "Please select a date" });
   const decisionDate = String(vendor_decision_date).trim();
-
-  if (!isISODate(decisionDate)) {
-    return res.json({
-      success: false,
-      message: "Invalid date format (expected YYYY-MM-DD)",
-    });
-  }
-
+  if (!isISODate(decisionDate)) return res.json({ success: false, message: "Invalid date format (expected YYYY-MM-DD)" });
   const newStatus = `Vendor: ${vendor_decision}`;
 
   try {
     const result = await db.query(
-      `SELECT "Status", "Vendor_Sent_Date", "DeliveryDate"
-       FROM repair_app.job_data
-       WHERE "Job_Id" = $1`,
+      `SELECT "Status", "Vendor_Sent_Date", "DeliveryDate" FROM repair_app.job_data WHERE "Job_Id" = $1`,
       [jobId],
     );
     const row = result.rows[0];
-
     if (!row) return res.json({ success: false, message: "Job not found" });
-
     const sentISO = toISODateOnly(row.Vendor_Sent_Date);
     const delISO = toISODateOnly(row.DeliveryDate);
-
-    if (!sentISO) {
-      return res.json({
-        success: false,
-        message:
-          "Vendor Sent Date is missing. Please use 'Send to Vendor' first.",
-      });
-    }
-
-    if (!delISO) {
-      return res.json({
-        success: false,
-        message:
-          "Delivery Date is missing. Please ask Store to update Delivery Date first.",
-      });
-    }
-
-    if (decisionDate < sentISO) {
-      return res.json({
-        success: false,
-        message: `Decision date must be on/after Vendor Sent Date (${sentISO}).`,
-      });
-    }
-
-    if (decisionDate > delISO) {
-      return res.json({
-        success: false,
-        message: `Decision date must be on/before Delivery Date (${delISO}).`,
-      });
-    }
+    if (!sentISO) return res.json({ success: false, message: "Vendor Sent Date is missing." });
+    if (!delISO) return res.json({ success: false, message: "Delivery Date is missing." });
+    if (decisionDate < sentISO) return res.json({ success: false, message: `Decision date must be on/after Vendor Sent Date (${sentISO}).` });
+    if (decisionDate > delISO) return res.json({ success: false, message: `Decision date must be on/before Delivery Date (${delISO}).` });
 
     const updateResult = await db.query(
-      `UPDATE repair_app.job_data
-       SET "Status" = $1,
-           "Vendor_Decision" = $2,
-           "Vendor_Decision_Date" = $3
-       WHERE "Job_Id" = $4`,
+      `UPDATE repair_app.job_data SET "Status" = $1, "Vendor_Decision" = $2, "Vendor_Decision_Date" = $3 WHERE "Job_Id" = $4`,
       [newStatus, vendor_decision, decisionDate, jobId],
     );
-
-    if (updateResult.rowCount === 0) {
-      return res.json({ success: false, message: "Job not found" });
-    }
-
+    if (updateResult.rowCount === 0) return res.json({ success: false, message: "Job not found" });
     return res.json({ success: true });
   } catch (err) {
     console.error("vendorDecision error:", err);
@@ -1018,6 +748,7 @@ const vendorDecision = async (req, res) => {
   }
 };
 
+// ── RETURN TO STORE ──────────────────────────────────────────────────────────
 const returnToStore = async (req, res) => {
   const { jobId, return_awb, return_remarks } = req.body;
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
@@ -1030,10 +761,7 @@ const returnToStore = async (req, res) => {
       `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
       [jobId],
     );
-
-    if (!result.rows[0]) {
-      return res.json({ success: false, message: "Job not found" });
-    }
+    if (!result.rows[0]) return res.json({ success: false, message: "Job not found" });
 
     const istNow = getISTTimestamp();
 
@@ -1058,32 +786,39 @@ const returnToStore = async (req, res) => {
   }
 };
 
+// ── STORE ACKNOWLEDGE — sends Product Ready SMS to customer ──────────────────
 const storeAcknowledge = async (req, res) => {
   const { jobId } = req.body;
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
-
   try {
     const result = await db.query(
-      `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
+      `SELECT "Status", "CustomerNumber" FROM repair_app.job_data WHERE "Job_Id" = $1`,
       [jobId],
     );
+    if (!result.rows[0]) return res.json({ success: false, message: "Job not found" });
 
-    if (!result.rows[0]) {
-      return res.json({ success: false, message: "Job not found" });
-    }
-
+    const customerPhone = (result.rows[0].CustomerNumber || "").trim();
     const istNow = getISTTimestamp();
 
     const updateResult = await db.query(
-      `UPDATE repair_app.job_data
-       SET "Status" = 'Store Received',
-           "Store_Received_Date" = $1
-       WHERE "Job_Id" = $2`,
+      `UPDATE repair_app.job_data SET "Status" = 'Store Received', "Store_Received_Date" = $1 WHERE "Job_Id" = $2`,
       [istNow, jobId],
     );
+    if (updateResult.rowCount === 0) return res.json({ success: false, message: "Job not found" });
 
-    if (updateResult.rowCount === 0) {
-      return res.json({ success: false, message: "Job not found" });
+    // ── Send Product Ready SMS to customer ──
+    if (customerPhone && SMS_TEMPLATE_ID_READY) {
+      const mobile = normalizeMobile(customerPhone);
+      if (mobile) {
+        const message = buildProductReadySMS(jobId);
+        sendSMS(mobile, message, SMS_TEMPLATE_ID_READY)
+          .then(() => console.log(`✓ Product Ready SMS sent to ${mobile} for Job ${jobId}`))
+          .catch((err) => console.error("Product Ready SMS failed:", err.message));
+      } else {
+        console.warn(`Invalid phone for Product Ready SMS: ${customerPhone}`);
+      }
+    } else {
+      console.warn("Product Ready SMS skipped — no phone or SMS_TEMPLATE_ID_READY not set");
     }
 
     return res.json({ success: true });
@@ -1110,8 +845,7 @@ const generateReceipt = async (req, res) => {
               "Store_Sent_Date", "Store_Received_Date",
               "Merchandise_Decision", "Merchandise_Action",
               "Ticket_Closing_Date", "Closing_Ticket_Remarks", "Status"
-       FROM repair_app.job_data
-       WHERE "Job_Id" = $1`,
+       FROM repair_app.job_data WHERE "Job_Id" = $1`,
       [jobId],
     );
     const job = jobResult.rows[0];
@@ -1119,12 +853,10 @@ const generateReceipt = async (req, res) => {
       return res.status(404).json({ success: false, message: "Job not found" });
     }
 
-    // Fetch warehouse address
     let warehouseAddress = "";
     if (job.WarehouseID || job.WarehouseName) {
       const whResult = await db.query(
-        `SELECT address, city, state FROM repair_app."Warehouse_Master"
-         WHERE wh_id = $1 OR warehouse_name = $2 LIMIT 1`,
+        `SELECT address, city, state FROM repair_app."Warehouse_Master" WHERE wh_id = $1 OR warehouse_name = $2 LIMIT 1`,
         [job.WarehouseID || "", job.WarehouseName || ""],
       );
       if (whResult.rows[0]) {
@@ -1133,13 +865,11 @@ const generateReceipt = async (req, res) => {
       }
     }
 
-    // Fetch store address
     let storeAddress = "";
     let storeName = "";
     if (job.Store_Id) {
       const storeResult = await db.query(
-        `SELECT address, city, state, store_name FROM repair_app."Store_Master"
-         WHERE store_id = $1 OR store_name = $1 LIMIT 1`,
+        `SELECT address, city, state, store_name FROM repair_app."Store_Master" WHERE store_id = $1 OR store_name = $1 LIMIT 1`,
         [job.Store_Id],
       );
       if (storeResult.rows[0]) {
@@ -1150,46 +880,33 @@ const generateReceipt = async (req, res) => {
     }
 
     const PDFDocument = require("pdfkit");
-
-    // A4: 595.28 x 841.89 points
     const PAGE_W = 595.28;
-    const PAGE_H = 841.89;
     const ML = 40;
     const MR = 40;
     const CW = PAGE_W - ML - MR;
-
-    const RED   = "#c0392b";
-    const NAVY  = "#18130e";
-    const GREY  = "#5a4f45";
+    const RED = "#c0392b";
+    const NAVY = "#18130e";
+    const GREY = "#5a4f45";
     const LGREY = "#9a8f85";
-    const BDR   = "#dfd6cc";
+    const BDR = "#dfd6cc";
 
-    const doc = new PDFDocument({
-      size: "A4",
-      margins: { top: 0, bottom: 0, left: 0, right: 0 },
-      autoFirstPage: true,
-    });
-
+    const doc = new PDFDocument({ size: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 }, autoFirstPage: true });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="Receipt-${jobId}.pdf"`);
     doc.pipe(res);
 
-    // ── HEADER (0–62) ──
     doc.rect(0, 0, PAGE_W, 62).fill(NAVY);
     doc.rect(0, 59, PAGE_W, 3).fill(RED);
-
     doc.fontSize(20).font("Helvetica-Bold").fillColor("#ffffff");
     doc.text("INC.5", ML, 14);
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.4)");
     doc.text("FOOTWEAR REPAIR PORTAL", ML, 38);
-
     doc.fontSize(13).font("Helvetica-Bold").fillColor(RED);
     doc.text("WAREHOUSE TRANSFER RECEIPT", ML, 14, { align: "right", width: CW });
     doc.fontSize(8).font("Helvetica").fillColor("rgba(255,255,255,0.4)");
-    const genDate = new Date().toLocaleDateString("en-IN", { day:"2-digit", month:"numeric", year:"numeric" });
+    const genDate = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "numeric", year: "numeric" });
     doc.text(`Generated: ${genDate}`, ML, 36, { align: "right", width: CW });
 
-    // ── RECEIPT NO + DATE (62–90) ──
     let y = 70;
     doc.fontSize(11).font("Helvetica-Bold").fillColor(NAVY);
     doc.text(`Receipt No: ${job.Job_Id}`, ML, y);
@@ -1197,45 +914,33 @@ const generateReceipt = async (req, res) => {
     const dispDate = job.Warehouse_Sent_Date || job.DispatchDate || "";
     doc.text(`Date: ${dispDate}`, ML, y + 14);
     y += 34;
-
     doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
     y += 10;
 
-    // ── FROM / TO (y–y+55) ──
     doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
     doc.text("FROM (STORE)", ML, y);
     doc.text("TO (WAREHOUSE)", ML + CW / 2 + 10, y);
     y += 13;
-
     doc.fontSize(10).font("Helvetica-Bold").fillColor(NAVY);
     doc.text(job.Store_Id || "—", ML, y, { width: CW / 2 - 5 });
-    doc.text(
-      job.WarehouseID ? `${job.WarehouseID}${job.WarehouseName ? " - " + job.WarehouseName : ""}` : "—",
-      ML + CW / 2 + 10, y, { width: CW / 2 - 10 }
-    );
+    doc.text(job.WarehouseID ? `${job.WarehouseID}${job.WarehouseName ? " - " + job.WarehouseName : ""}` : "—", ML + CW / 2 + 10, y, { width: CW / 2 - 10 });
     y += 14;
-
     doc.fontSize(8).font("Helvetica").fillColor(GREY);
     const storeText = [storeName, storeAddress].filter(Boolean).join("\n") || "—";
-    const whText = warehouseAddress || "—";
     doc.text(storeText, ML, y, { width: CW / 2 - 5 });
-    doc.text(whText, ML + CW / 2 + 10, y, { width: CW / 2 - 10 });
+    doc.text(warehouseAddress || "—", ML + CW / 2 + 10, y, { width: CW / 2 - 10 });
     y += 28;
-
     doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
     y += 10;
 
-    // helper: draw a key-value row, returns new y
     const row = (label, value, yy) => {
       doc.fontSize(8).font("Helvetica-Bold").fillColor(LGREY);
       doc.text(label, ML, yy, { width: 130 });
       doc.fontSize(9).font("Helvetica").fillColor(NAVY);
-      // Strip " - Typed" suffix for display, add tag after
       const raw = (value || "").toString().trim();
       const typedMatch = raw.match(/^(.+?)\s*-\s*Typed\s*$/i);
       if (typedMatch) {
         doc.text(typedMatch[1].trim(), ML + 135, yy, { width: CW - 135, continued: false });
-        // small amber "Typed" label
         doc.fontSize(6).font("Helvetica-Bold").fillColor("#b45309");
         doc.text(" [Typed]", ML + 135 + doc.widthOfString(typedMatch[1].trim()), yy);
       } else {
@@ -1244,35 +949,29 @@ const generateReceipt = async (req, res) => {
       return yy + 16;
     };
 
-    // ── ITEM DETAILS ──
     doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
     doc.text("ITEM DETAILS", ML, y);
     y += 13;
-
-    y = row("Job ID",        job.Job_Id,            y);
-    y = row("Barcode",       job.BARCODE,           y);
-    y = row("Item ID",       job.ITEM_ID,           y);
-    y = row("Warranty",      job.ProductUnder90Days, y);
+    y = row("Job ID", job.Job_Id, y);
+    y = row("Barcode", job.BARCODE, y);
+    y = row("Item ID", job.ITEM_ID, y);
+    y = row("Warranty", job.ProductUnder90Days, y);
     if (job.DamageReason) y = row("Damage Reason", job.DamageReason, y);
 
     y += 4;
     doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
     y += 10;
-
-    // ── DISPATCH DETAILS ──
     doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
     doc.text("DISPATCH DETAILS", ML, y);
     y += 13;
-
-    y = row("Warehouse ID",   job.WarehouseID,       y);
-    y = row("Warehouse Name", job.WarehouseName,     y);
-    y = row("Courier",        job.CourierName,       y);
-    y = row("AWB No.",        job.AWB,               y);
-    y = row("Dispatch Date",  job.DispatchDate,      y);
-    y = row("Store ID",       job.Store_Id,          y);
+    y = row("Warehouse ID", job.WarehouseID, y);
+    y = row("Warehouse Name", job.WarehouseName, y);
+    y = row("Courier", job.CourierName, y);
+    y = row("AWB No.", job.AWB, y);
+    y = row("Dispatch Date", job.DispatchDate, y);
+    y = row("Store ID", job.Store_Id, y);
     if (job.WarehouseRemarks) y = row("Remarks", job.WarehouseRemarks, y);
 
-    // ── VENDOR DETAILS (if any) ──
     if (job.Vendor_Name) {
       y += 4;
       doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
@@ -1280,14 +979,13 @@ const generateReceipt = async (req, res) => {
       doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
       doc.text("VENDOR DETAILS", ML, y);
       y += 13;
-      y = row("Vendor",       job.Vendor_Name,     y);
-      y = row("Gate Pass No", job.Gate_Pass_No,    y);
-      y = row("AWB No.",      job.Vendor_Awb,      y);
-      y = row("Sent Date",    job.Vendor_Sent_Date, y);
-      y = row("Decision",     job.Vendor_Decision,  y);
+      y = row("Vendor", job.Vendor_Name, y);
+      y = row("Gate Pass No", job.Gate_Pass_No, y);
+      y = row("AWB No.", job.Vendor_Awb, y);
+      y = row("Sent Date", job.Vendor_Sent_Date, y);
+      y = row("Decision", job.Vendor_Decision, y);
     }
 
-    // ── RETURN TO STORE (if any) ──
     if (job.Return_Store_AWB || job.Store_Sent_Date) {
       y += 4;
       doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
@@ -1295,13 +993,12 @@ const generateReceipt = async (req, res) => {
       doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
       doc.text("RETURN TO STORE", ML, y);
       y += 13;
-      y = row("Return AWB",    job.Return_Store_AWB,      y);
-      y = row("Sent Date",     job.Store_Sent_Date,       y);
-      y = row("Received Date", job.Store_Received_Date,   y);
+      y = row("Return AWB", job.Return_Store_AWB, y);
+      y = row("Sent Date", job.Store_Sent_Date, y);
+      y = row("Received Date", job.Store_Received_Date, y);
       if (job.Return_Store_Remarks) y = row("Remarks", job.Return_Store_Remarks, y);
     }
 
-    // ── SIGNATURES — fixed at y=740 so footer always at bottom ──
     const sigY = 740;
     const sigW = 160;
     doc.moveTo(ML, sigY).lineTo(ML + sigW, sigY).strokeColor(NAVY).lineWidth(0.5).stroke();
@@ -1310,16 +1007,14 @@ const generateReceipt = async (req, res) => {
     doc.text("Store Signature / Stamp", ML, sigY + 5);
     doc.text("Warehouse Signature / Stamp", ML + CW - sigW, sigY + 5, { width: sigW });
 
-    // ── FOOTER — fixed at bottom of A4 (800–841) ──
     doc.rect(0, 800, PAGE_W, 41.89).fill(NAVY);
     doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.45)");
     doc.text(
       "This is a system-generated receipt from Inc.5 Footwear Repair Portal. No signature required for digital copy.",
-      ML, 815, { width: CW, align: "center" }
+      ML, 815, { width: CW, align: "center" },
     );
 
     doc.end();
-
   } catch (err) {
     console.error("generateReceipt error:", err);
     if (!res.headersSent) {
@@ -1329,21 +1024,8 @@ const generateReceipt = async (req, res) => {
 };
 
 module.exports = {
-  renderAnalytics,
-  getJobs,
-  getStatuses,
-  getAttachment,
-  getWhAttachment,
-  updateDeliveryDate,
-  closeTicket,
-  saveWarehouseDraft,
-  transferToWarehouse,
-  warehouseAcknowledge,
-  saveVendorDraft,
-  sendToVendor,
-  vendorDecision,
-  returnToStore,
-  storeAcknowledge,
-  adminUpdateJob,
-  generateReceipt,
+  renderAnalytics, getJobs, getStatuses, getAttachment, getWhAttachment,
+  updateDeliveryDate, closeTicket, saveWarehouseDraft, transferToWarehouse,
+  warehouseAcknowledge, saveVendorDraft, sendToVendor, vendorDecision,
+  returnToStore, storeAcknowledge, adminUpdateJob, generateReceipt,
 };

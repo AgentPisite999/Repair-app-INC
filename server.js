@@ -35,8 +35,8 @@ app.get("/health", (req, res) => {
 });
 
 // Routes
-app.use("/", adminRoutes);
 app.use("/", authRoutes);
+app.use("/admin", adminRoutes);
 app.use("/api/dashboard", dashboardApiRoutes);
 
 // 404 handler

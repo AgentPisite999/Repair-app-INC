@@ -1123,3 +1123,229 @@ body {
     font-size: 13.5px;
   }
 }
+
+
+/* ══════════════════════════════════════
+   USER MANAGEMENT — APPEND TO admin.css
+══════════════════════════════════════ */
+
+/* License Badge in toolbar */
+.user-license-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-mid);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.user-license-badge i { color: var(--red); font-size: 12px; }
+.user-license-badge--warn {
+  background: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+.user-license-badge--warn i { color: #f59e0b; }
+
+/* KPI User card license bar */
+.kpi-card--users { cursor: pointer; }
+.kpi-license-slash {
+  font-family: "Jost", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-light);
+}
+.kpi-license-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.kpi-license-bar {
+  flex: 1;
+  height: 5px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.kpi-license-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 99px;
+  transition: width 0.6s ease;
+}
+.kpi-license-fill--warn { background: var(--red); }
+.kpi-license-pct {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-light);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.kpi-license-pct--warn { color: var(--red); }
+
+/* Role Badges */
+.role-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.role-store       { background: #ebf8ff; color: #2b6cb0; }
+.role-warehouse   { background: #e6fffa; color: #276749; }
+.role-warehouse---1093 { background: #e6fffa; color: #276749; }
+.role-rm          { background: #faf5ff; color: #6b46c1; }
+.role-admin       { background: #fff5f5; color: var(--red); }
+.role-dashboard   { background: #fffff0; color: #744210; }
+.role-superadmin  { background: var(--navy); color: #ffd700; }
+
+/* Password hidden */
+.pw-hidden {
+  color: var(--text-light);
+  font-size: 12px;
+  letter-spacing: 3px;
+}
+.pw-hidden i { font-size: 10px; letter-spacing: 0; margin-right: 4px; }
+
+/* SuperAdmin shield icon */
+.superadmin-shield {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: #f59e0b;
+  font-size: 13px;
+  cursor: default;
+}
+
+/* Password input with toggle */
+.pw-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.pw-input-wrap .form-input,
+.pw-input-wrap input {
+  width: 100%;
+  padding-right: 42px;
+  padding: 9px 42px 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: "Jost", sans-serif;
+  font-weight: 400;
+  color: var(--text-dark);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.pw-input-wrap input:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--red-soft);
+  background: #fff;
+}
+.toggle-pw-btn {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-light);
+  padding: 4px;
+  font-size: 12px;
+  transition: color 0.2s;
+  line-height: 1;
+}
+.toggle-pw-btn:hover { color: var(--red); }
+
+/* Select dropdown styled like input */
+.form-group select {
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: "Jost", sans-serif;
+  font-weight: 400;
+  color: var(--text-dark);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239a8f85' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  cursor: pointer;
+}
+.form-group select:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--red-soft);
+  background-color: #fff;
+}
+
+/* btn-warning for reset password */
+.btn-warning {
+  background: #d97706;
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(217, 119, 6, 0.28);
+}
+.btn-warning:hover {
+  background: #b45309;
+  box-shadow: 0 4px 16px rgba(180, 83, 9, 0.35);
+  transform: translateY(-1px);
+}
+.btn-warning:active { transform: translateY(0); }
+
+/* Reset password key icon button */
+.reset-pw-btn {
+  border-color: #bee3f8 !important;
+  color: #2b6cb0 !important;
+}
+.reset-pw-btn:hover {
+  border-color: #2b6cb0 !important;
+  color: #2b6cb0 !important;
+  background: #ebf8ff !important;
+}
+
+/* User pagination container */
+#userPagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  margin-top: 20px;
+}
+#userPagination button {
+  padding: 7px 13px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: "Jost", sans-serif;
+  font-weight: 500;
+  color: var(--text-mid);
+  letter-spacing: 0.04em;
+  transition: all 0.2s;
+}
+#userPagination button.active {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+  box-shadow: 0 2px 8px rgba(192, 57, 43, 0.25);
+}
+#userPagination button:hover:not(.active):not(:disabled) {
+  border-color: var(--red-border);
+  color: var(--red);
+  background: var(--red-soft);
+}
+#userPagination button:disabled { opacity: 0.35; cursor: default; }

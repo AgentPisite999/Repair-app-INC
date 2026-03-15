@@ -5,17 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Super Admin Panel</title>
     <link rel="stylesheet" href="/css/admin.css" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   </head>
   <body>
     <div class="admin-wrapper">
+
       <!-- Sidebar -->
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -35,8 +30,7 @@
             <i class="fas fa-store"></i><span>Store Master</span>
           </a>
           <a href="#" class="nav-item" data-tab="Damage_Reason_Master">
-            <i class="fas fa-exclamation-triangle"></i
-            ><span>Damage Reason Master</span>
+            <i class="fas fa-exclamation-triangle"></i><span>Damage Reason Master</span>
           </a>
           <a href="#" class="nav-item" data-tab="Warehouse_Master">
             <i class="fas fa-warehouse"></i><span>Warehouse Master</span>
@@ -50,6 +44,11 @@
           <a href="#" class="nav-item" data-tab="RM_Data">
             <i class="fas fa-users"></i><span>RM Data</span>
           </a>
+          <div class="nav-divider"></div>
+          <div class="nav-section-title">Access Control</div>
+          <a href="#" class="nav-item" data-tab="users">
+            <i class="fas fa-user-cog"></i><span>User Management</span>
+          </a>
         </nav>
         <div class="sidebar-footer">
           <button class="logout-btn" id="logoutBtn">
@@ -60,11 +59,8 @@
 
       <!-- Main Content -->
       <main class="main-content">
-        <!-- Navbar -->
         <header class="topbar">
-          <button class="menu-toggle" id="menuToggle">
-            <i class="fas fa-bars"></i>
-          </button>
+          <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
           <h1 class="page-title" id="pageTitle">Dashboard</h1>
           <div class="user-info">
             <i class="fas fa-user-circle"></i>
@@ -72,36 +68,30 @@
           </div>
         </header>
 
-        <!-- Content Area -->
         <div class="content-area" id="contentArea">
-          <!-- Dashboard View -->
+
+          <!-- Dashboard -->
           <div class="view active" id="view-dashboard">
             <div class="kpi-grid" id="kpiGrid">
-              <div class="kpi-loading">
-                <i class="fas fa-spinner fa-spin"></i> Loading KPIs...
-              </div>
+              <div class="kpi-loading"><i class="fas fa-spinner fa-spin"></i> Loading KPIs...</div>
             </div>
           </div>
 
-          <!-- Table View (reused for all tables) -->
-          <div class="view" id="view-table" style="display: none">
+          <!-- Master Table View -->
+          <div class="view" id="view-table">
             <div class="table-toolbar">
               <div class="toolbar-left">
                 <div class="search-box">
                   <i class="fas fa-search"></i>
-                  <input
-                    type="text"
-                    id="searchInput"
-                    placeholder="Search records..."
-                  />
+                  <input type="text" id="searchInput" placeholder="Search records..." />
                 </div>
               </div>
               <div class="toolbar-right">
                 <button class="btn btn-outline" id="downloadTemplateBtn">
-                  <i class="fas fa-download"></i> Download Template
+                  <i class="fas fa-download"></i> Template
                 </button>
                 <button class="btn btn-outline" id="uploadBtn">
-                  <i class="fas fa-file-upload"></i> Upload Excel/CSV
+                  <i class="fas fa-file-upload"></i> Upload
                 </button>
                 <button class="btn btn-primary" id="addRecordBtn">
                   <i class="fas fa-plus"></i> Add Record
@@ -109,18 +99,55 @@
               </div>
             </div>
             <div class="table-container">
-              <table class="data-table" id="dataTable">
+              <table class="data-table">
                 <thead id="tableHead"></thead>
                 <tbody id="tableBody"></tbody>
               </table>
             </div>
             <div class="pagination" id="pagination"></div>
           </div>
+
+          <!-- User Management View -->
+          <div class="view" id="view-users">
+            <div class="table-toolbar">
+              <div class="toolbar-left">
+                <div class="search-box">
+                  <i class="fas fa-search"></i>
+                  <input type="text" id="userSearchInput" placeholder="Search by User ID or Role..." />
+                </div>
+              </div>
+              <div class="toolbar-right">
+                <div class="user-license-badge" id="userLicenseBadge">
+                  <i class="fas fa-id-badge"></i>
+                  <span id="userLicenseText">Loading...</span>
+                </div>
+                <button class="btn btn-primary" id="addUserBtn">
+                  <i class="fas fa-user-plus"></i> Add User
+                </button>
+              </div>
+            </div>
+            <div class="table-container">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>User ID</th>
+                    <th>Role</th>
+                    <th>Password</th>
+                    <th style="width:100px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="userTableBody"></tbody>
+              </table>
+            </div>
+            <div id="userPagination"></div>
+          </div>
+
         </div>
       </main>
     </div>
 
-    <!-- CRUD Modal -->
+    <!-- ── CRUD Modal ── -->
     <div class="modal-overlay" id="crudModal">
       <div class="modal">
         <div class="modal-header">
@@ -135,7 +162,92 @@
       </div>
     </div>
 
-    <!-- Upload Modal -->
+    <!-- ── Add User Modal ── -->
+    <div class="modal-overlay" id="addUserModal">
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h2>Add New User</h2>
+          <button class="modal-close" id="addUserModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-grid" style="grid-template-columns:1fr;">
+            <div class="form-group">
+              <label>User ID <span style="color:var(--red)">*</span></label>
+              <input type="text" id="newUserId" placeholder="Enter User ID" />
+            </div>
+            <div class="form-group">
+              <label>Password <span style="color:var(--red)">*</span></label>
+              <div class="pw-input-wrap">
+                <input type="password" id="newUserPassword" placeholder="Enter Password" />
+                <button type="button" class="toggle-pw-btn" data-target="newUserPassword">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Role <span style="color:var(--red)">*</span></label>
+              <select id="newUserRole">
+                <option value="">-- Select Role --</option>
+                <option value="Store">Store</option>
+                <option value="Warehouse">Warehouse</option>
+                <option value="RM">RM</option>
+                <option value="Admin">Admin</option>
+                <option value="Dashboard">Dashboard</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="addUserCancelBtn">Cancel</button>
+          <button class="btn btn-primary" id="addUserSaveBtn">
+            <i class="fas fa-user-plus"></i> Create User
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Reset Password Modal ── -->
+    <div class="modal-overlay" id="resetPasswordModal">
+      <div class="modal modal-sm">
+        <div class="modal-header">
+          <h2>Reset Password</h2>
+          <button class="modal-close" id="resetPasswordModalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:12px;color:var(--text-mid);margin-bottom:16px;">
+            Resetting password for: <strong id="resetUserId" style="color:var(--text-dark);"></strong>
+          </p>
+          <div class="form-grid" style="grid-template-columns:1fr;">
+            <div class="form-group">
+              <label>New Password <span style="color:var(--red)">*</span></label>
+              <div class="pw-input-wrap">
+                <input type="password" id="resetPasswordInput" placeholder="Enter new password" />
+                <button type="button" class="toggle-pw-btn" data-target="resetPasswordInput">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Confirm Password <span style="color:var(--red)">*</span></label>
+              <div class="pw-input-wrap">
+                <input type="password" id="resetPasswordConfirm" placeholder="Confirm new password" />
+                <button type="button" class="toggle-pw-btn" data-target="resetPasswordConfirm">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="resetPasswordCancelBtn">Cancel</button>
+          <button class="btn btn-warning" id="resetPasswordSaveBtn">
+            <i class="fas fa-key"></i> Reset Password
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Upload Modal ── -->
     <div class="modal-overlay" id="uploadModal">
       <div class="modal">
         <div class="modal-header">
@@ -148,62 +260,39 @@
               <i class="fas fa-cloud-upload-alt"></i>
               <p>Click to select or drag & drop</p>
               <p class="upload-hint">Accepts .xlsx, .csv (Max 10MB)</p>
-              <input
-                type="file"
-                id="fileInput"
-                accept=".xlsx,.csv,.xls"
-                hidden
-              />
+              <input type="file" id="fileInput" accept=".xlsx,.csv,.xls" hidden />
             </div>
-            <div
-              class="progress-container"
-              id="uploadProgressContainer"
-              style="display: none"
-            >
+            <div class="progress-container" id="uploadProgressContainer" style="display:none">
               <div class="progress-label">Uploading file...</div>
               <div class="progress-bar">
                 <div class="progress-fill" id="uploadProgressBar">0%</div>
               </div>
             </div>
           </div>
-          <div id="uploadStep2" style="display: none">
+          <div id="uploadStep2" style="display:none">
             <div class="upload-summary" id="uploadSummary"></div>
-            <div
-              class="progress-container"
-              id="insertProgressContainer"
-              style="display: none"
-            >
+            <div class="progress-container" id="insertProgressContainer" style="display:none">
               <div class="progress-label">Inserting data...</div>
               <div class="progress-bar">
                 <div class="progress-fill" id="insertProgressBar">0%</div>
               </div>
             </div>
           </div>
-          <div id="uploadStep3" style="display: none">
+          <div id="uploadStep3" style="display:none">
             <div class="upload-result" id="uploadResult"></div>
           </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="uploadCancelBtn">Cancel</button>
-          <button
-            class="btn btn-primary"
-            id="insertDataBtn"
-            style="display: none"
-          >
+          <button class="btn btn-primary" id="insertDataBtn" style="display:none">
             <i class="fas fa-database"></i> Insert Data
           </button>
-          <button
-            class="btn btn-primary"
-            id="uploadDoneBtn"
-            style="display: none"
-          >
-            Done
-          </button>
+          <button class="btn btn-primary" id="uploadDoneBtn" style="display:none">Done</button>
         </div>
       </div>
     </div>
 
-    <!-- Delete Confirm Modal -->
+    <!-- ── Delete Confirm Modal ── -->
     <div class="modal-overlay" id="deleteModal">
       <div class="modal modal-sm">
         <div class="modal-header">
@@ -211,9 +300,8 @@
           <button class="modal-close" id="deleteModalClose">&times;</button>
         </div>
         <div class="modal-body">
-          <p>
-            Are you sure you want to delete this record? This action cannot be
-            undone.
+          <p style="color:var(--text-mid);font-size:13px;">
+            Are you sure you want to delete this record? This action cannot be undone.
           </p>
         </div>
         <div class="modal-footer">
@@ -223,11 +311,12 @@
       </div>
     </div>
 
-    <!-- Alert/Toast -->
+    <!-- Toast -->
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
       window.TABLE_CONFIG = <%- tableConfig %>;
+      window.MAX_USERS = <%= maxUsers %>;
     </script>
     <script src="/js/admin.js"></script>
   </body>

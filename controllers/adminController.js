@@ -2,6 +2,9 @@
 
 const { db } = require("../config/database");
 const XLSX = require("xlsx");
+const bcrypt = require("bcrypt");
+
+const MAX_USERS = 120;
 
 const TABLE_CONFIG = {
   Item_Master: {
@@ -129,6 +132,8 @@ const TABLE_CONFIG = {
   },
 };
 
+const ALLOWED_ROLES = ["Store", "Warehouse", "RM", "Admin", "Dashboard"];
+
 const colRef = (colName, quoted) => (quoted ? `"${colName}"` : colName);
 
 // Render admin panel
@@ -137,6 +142,7 @@ const renderPanel = (req, res) => {
     userId: req.session.userIdDisplay,
     role: req.session.role || "SuperAdmin",
     tableConfig: JSON.stringify(TABLE_CONFIG),
+    maxUsers: MAX_USERS,
   });
 };
 
@@ -154,12 +160,183 @@ const getDashboardKPIs = async (req, res) => {
         count: parseInt(result.rows[0].count, 10),
       });
     }
+
+    // User count KPI
+    const userCountResult = await db.query(
+      `SELECT COUNT(*) as count FROM repair_app.users`,
+    );
+    const userCount = parseInt(userCountResult.rows[0].count, 10);
+    kpis.push({
+      table: "Users",
+      displayName: "Users",
+      count: userCount,
+      maxUsers: MAX_USERS,
+      isUserKpi: true,
+    });
+
     res.json({ success: true, kpis });
   } catch (err) {
     console.error("Dashboard KPI error:", err);
     res.status(500).json({ success: false, message: "Failed to fetch KPIs" });
   }
 };
+
+// ─── USER MANAGEMENT ───────────────────────────────────────────────────────
+
+// Get all users (no passwords)
+const getUsers = async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
+  const search = (req.query.search || "").trim();
+  const offset = (page - 1) * limit;
+
+  try {
+    let whereClause = "";
+    const params = [];
+
+    if (search) {
+      params.push(`%${search}%`);
+      whereClause = `WHERE user_id ILIKE $1 OR role ILIKE $1`;
+    }
+
+    const countResult = await db.query(
+      `SELECT COUNT(*) as total FROM repair_app.users ${whereClause}`,
+      params,
+    );
+    const total = parseInt(countResult.rows[0].total, 10);
+
+    const dataParams = [...params, limit, offset];
+    const dataResult = await db.query(
+      `SELECT id, user_id, role FROM repair_app.users ${whereClause} ORDER BY id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      dataParams,
+    );
+
+    res.json({
+      success: true,
+      data: dataResult.rows,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      maxUsers: MAX_USERS,
+    });
+  } catch (err) {
+    console.error("Get users error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch users" });
+  }
+};
+
+// Add new user
+const addUser = async (req, res) => {
+  const { user_id, password, role } = req.body;
+
+  if (!user_id || !password || !role) {
+    return res
+      .status(400)
+      .json({ success: false, message: "User ID, password and role are required" });
+  }
+
+  if (!ALLOWED_ROLES.includes(role)) {
+    return res.status(400).json({ success: false, message: "Invalid role selected" });
+  }
+
+  try {
+    // Check user limit
+    const countResult = await db.query(
+      `SELECT COUNT(*) as count FROM repair_app.users`,
+    );
+    const currentCount = parseInt(countResult.rows[0].count, 10);
+
+    if (currentCount >= MAX_USERS) {
+      return res.status(403).json({
+        success: false,
+        message: `User limit reached. Maximum ${MAX_USERS} users allowed under your license.`,
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const result = await db.query(
+      `INSERT INTO repair_app.users (user_id, password, role) VALUES ($1, $2, $3) RETURNING id, user_id, role`,
+      [user_id, hashedPassword, role],
+    );
+
+    res.json({
+      success: true,
+      message: "User created successfully",
+      user: result.rows[0],
+    });
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(409).json({ success: false, message: "User ID already exists" });
+    }
+    console.error("Add user error:", err);
+    res.status(500).json({ success: false, message: "Failed to create user" });
+  }
+};
+
+// Reset user password
+const resetUserPassword = async (req, res) => {
+  const { id } = req.params;
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 4) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Password must be at least 4 characters" });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const result = await db.query(
+      `UPDATE repair_app.users SET password = $1 WHERE id = $2 RETURNING user_id`,
+      [hashedPassword, id],
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: `Password reset successfully for ${result.rows[0].user_id}`,
+    });
+  } catch (err) {
+    console.error("Reset password error:", err);
+    res.status(500).json({ success: false, message: "Failed to reset password" });
+  }
+};
+
+// Delete user
+const deleteUser = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Prevent deleting SuperAdmin
+    const userCheck = await db.query(
+      `SELECT user_id, role FROM repair_app.users WHERE id = $1`,
+      [id],
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    if (userCheck.rows[0].role === "SuperAdmin") {
+      return res
+        .status(403)
+        .json({ success: false, message: "Cannot delete SuperAdmin user" });
+    }
+
+    await db.query(`DELETE FROM repair_app.users WHERE id = $1`, [id]);
+    res.json({ success: true, message: "User deleted successfully" });
+  } catch (err) {
+    console.error("Delete user error:", err);
+    res.status(500).json({ success: false, message: "Failed to delete user" });
+  }
+};
+
+// ─── MASTER TABLE CONTROLLERS ──────────────────────────────────────────────
 
 // Get table data with search and pagination
 const getTableData = async (req, res) => {
@@ -178,7 +355,6 @@ const getTableData = async (req, res) => {
     const params = [];
 
     if (search) {
-      // Only search in the specific searchColumns defined for this table
       const searchCols = cfg.searchColumns || cfg.columns.map((c) => c.db);
       const conditions = searchCols.map((col, i) => {
         params.push(`%${search}%`);
@@ -191,7 +367,6 @@ const getTableData = async (req, res) => {
     const countResult = await db.query(countQuery, params);
     const total = parseInt(countResult.rows[0].total, 10);
 
-    // Select ALL columns defined in config (same as template)
     const allCols = cfg.columns
       .map((c) => colRef(c.db, cfg.quotedCols))
       .join(", ");
@@ -234,18 +409,12 @@ const createRecord = async (req, res) => {
     }
 
     if (cols.length === 0) {
-      return res
-        .status(400)
-        .json({ success: false, message: "No data provided" });
+      return res.status(400).json({ success: false, message: "No data provided" });
     }
 
     const query = `INSERT INTO repair_app.${cfg.dbName} (${cols.join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING id`;
     const result = await db.query(query, vals);
-    res.json({
-      success: true,
-      message: "Record created",
-      id: result.rows[0].id,
-    });
+    res.json({ success: true, message: "Record created", id: result.rows[0].id });
   } catch (err) {
     if (err.code === "23505") {
       return res.status(409).json({
@@ -254,9 +423,7 @@ const createRecord = async (req, res) => {
       });
     }
     console.error("Create record error:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to create record" });
+    res.status(500).json({ success: false, message: "Failed to create record" });
   }
 };
 
@@ -280,9 +447,7 @@ const updateRecord = async (req, res) => {
     }
 
     if (sets.length === 0) {
-      return res
-        .status(400)
-        .json({ success: false, message: "No data provided" });
+      return res.status(400).json({ success: false, message: "No data provided" });
     }
 
     vals.push(id);
@@ -291,14 +456,10 @@ const updateRecord = async (req, res) => {
     res.json({ success: true, message: "Record updated" });
   } catch (err) {
     if (err.code === "23505") {
-      return res
-        .status(409)
-        .json({ success: false, message: "Duplicate unique key value" });
+      return res.status(409).json({ success: false, message: "Duplicate unique key value" });
     }
     console.error("Update record error:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to update record" });
+    res.status(500).json({ success: false, message: "Failed to update record" });
   }
 };
 
@@ -314,9 +475,7 @@ const deleteRecord = async (req, res) => {
     res.json({ success: true, message: "Record deleted" });
   } catch (err) {
     console.error("Delete record error:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to delete record" });
+    res.status(500).json({ success: false, message: "Failed to delete record" });
   }
 };
 
@@ -328,9 +487,7 @@ const uploadFile = async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid table" });
 
   if (!req.file) {
-    return res
-      .status(400)
-      .json({ success: false, message: "No file uploaded" });
+    return res.status(400).json({ success: false, message: "No file uploaded" });
   }
 
   try {
@@ -343,7 +500,6 @@ const uploadFile = async (req, res) => {
       return res.status(400).json({ success: false, message: "File is empty" });
     }
 
-    // Map headers to column db names
     const validCols = cfg.columns.map((c) => c.db);
     const rows = jsonData.map((row) => {
       const mapped = {};
@@ -369,16 +525,13 @@ const insertData = async (req, res) => {
 
   const { rows } = req.body;
   if (!rows || !Array.isArray(rows) || rows.length === 0) {
-    return res
-      .status(400)
-      .json({ success: false, message: "No data to insert" });
+    return res.status(400).json({ success: false, message: "No data to insert" });
   }
 
   try {
     const uniqueCol = cfg.uniqueKey;
     const uniqueColRef = colRef(uniqueCol, cfg.quotedCols);
 
-    // Get existing unique keys
     const existingResult = await db.query(
       `SELECT ${uniqueColRef} FROM repair_app.${cfg.dbName}`,
     );
@@ -442,12 +595,7 @@ const insertData = async (req, res) => {
     });
   } catch (err) {
     console.error("Insert data error:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to insert data: " + err.message,
-      });
+    res.status(500).json({ success: false, message: "Failed to insert data: " + err.message });
   }
 };
 
@@ -465,20 +613,12 @@ const downloadTemplate = async (req, res) => {
     XLSX.utils.book_append_sheet(wb, ws, tableName);
     const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=${tableName}_template.xlsx`,
-    );
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    );
+    res.setHeader("Content-Disposition", `attachment; filename=${tableName}_template.xlsx`);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.send(buf);
   } catch (err) {
     console.error("Template download error:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to generate template" });
+    res.status(500).json({ success: false, message: "Failed to generate template" });
   }
 };
 
@@ -498,4 +638,9 @@ module.exports = {
   insertData,
   downloadTemplate,
   getConfig,
+  // User management
+  getUsers,
+  addUser,
+  resetUserPassword,
+  deleteUser,
 };
