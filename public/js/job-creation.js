@@ -25,6 +25,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const department = document.getElementById("department");
   const itemRemarksInput = document.getElementById("item_remarks");
 
+  // Display fields (readonly visible) — Style, Color, Size, RSP
+  const category2Display = document.getElementById("category2_display");
+  const category3Display = document.getElementById("category3_display");
+  const category4Display = document.getElementById("category4_display");
+  const rspDisplay = document.getElementById("rsp_display");
+
+  // Hidden fields for form submission of new columns
+  const category2Hidden = document.getElementById("category2");
+  const category3Hidden = document.getElementById("category3");
+  const category4Hidden = document.getElementById("category4");
+  const rspHidden = document.getElementById("rsp");
+
   const damageReasonSelect = document.getElementById("damage_reason");
   const damageOtherWrap = document.getElementById("damageOtherWrap");
   const deliveryDateInput = document.getElementById("delivery_date");
@@ -408,6 +420,14 @@ document.addEventListener("DOMContentLoaded", () => {
     itemDetailsNew.classList.add("hidden");
     itemMissingInput.value = "false";
     itemId.value = division.value = section.value = department.value = "";
+    category2Display.value = "";
+    category3Display.value = "";
+    category4Display.value = "";
+    rspDisplay.value = "";
+    category2Hidden.value = "";
+    category3Hidden.value = "";
+    category4Hidden.value = "";
+    rspHidden.value = "";
     try {
       const res = await fetch(
         `/api/item?barcode=${encodeURIComponent(barcode)}`,
@@ -423,10 +443,20 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => itemRemarksInput.focus(), 100);
       } else {
         const it = data.item;
+        // Hidden fields for form submission
         itemId.value = it.item_id || "";
         division.value = it.division || "";
         section.value = it.section || "";
         department.value = it.department || "";
+        category2Hidden.value = it.category2 || "";
+        category3Hidden.value = it.category3 || "";
+        category4Hidden.value = it.category4 || "";
+        rspHidden.value = it.rsp || "";
+        // Visible display fields
+        category2Display.value = it.category2 || "";
+        category3Display.value = it.category3 || "";
+        category4Display.value = it.category4 || "";
+        rspDisplay.value = it.rsp || "";
         itemDetailsExisting.classList.remove("hidden");
       }
     } catch (e) {
@@ -571,7 +601,7 @@ document.addEventListener("DOMContentLoaded", () => {
     otpVerifyStatus.className = "otp-verify-status";
     confirmCreateJobBtn.disabled = true;
     otpVerified = false;
-    resendOtpBtn.disabled = false; // ✅ Resend always enabled
+    resendOtpBtn.disabled = false;
     otpPhoneDisplay.textContent = customerNumberInput.value.trim();
     setTimeout(() => otpModalInput.focus(), 200);
   }
@@ -589,7 +619,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function startOtpTimer() {
-    otpSeconds = 300; // 5 minutes
+    otpSeconds = 300;
     updateTimerDisplay();
     otpTimerInterval = setInterval(() => {
       otpSeconds--;
@@ -650,7 +680,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── Auto-verify OTP on 6 digit input ──
   otpModalInput.addEventListener("input", async () => {
-    // Allow only digits
     otpModalInput.value = otpModalInput.value.replace(/\D/g, "");
 
     if (otpModalInput.value.length !== 6) {
@@ -661,7 +690,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Auto verify
     otpVerifyStatus.textContent = "Verifying…";
     otpVerifyStatus.className = "otp-verify-status otp-status-pending";
 
@@ -700,7 +728,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ── Resend OTP ──
   resendOtpBtn.addEventListener("click", async () => {
-    resendOtpBtn.disabled = true; // temporarily disable while sending
+    resendOtpBtn.disabled = true;
     otpModalInput.value = "";
     otpModalInput.readOnly = false;
     otpVerifyStatus.textContent = "Sending OTP…";
@@ -735,7 +763,7 @@ document.addEventListener("DOMContentLoaded", () => {
       otpVerifyStatus.textContent = "Error resending OTP";
       otpVerifyStatus.className = "otp-verify-status otp-status-error";
     } finally {
-      resendOtpBtn.disabled = false; // ✅ Always re-enable after request completes
+      resendOtpBtn.disabled = false;
     }
   });
 
@@ -845,6 +873,14 @@ document.addEventListener("DOMContentLoaded", () => {
       el.style.borderColor = "";
       el.style.boxShadow = "";
     });
+    category2Display.value = "";
+    category3Display.value = "";
+    category4Display.value = "";
+    rspDisplay.value = "";
+    category2Hidden.value = "";
+    category3Hidden.value = "";
+    category4Hidden.value = "";
+    rspHidden.value = "";
     setTimeout(() => barcodeInput.focus(), 100);
   }
 

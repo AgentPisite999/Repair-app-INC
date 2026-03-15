@@ -22,11 +22,6 @@
     <!-- ══ NAVBAR ══ -->
     <nav class="navbar">
       <div class="nav-brand">
-        <!--
-          Inc5_White.png = white logo extracted on fully transparent background.
-          Copy to public/uploads/Inc5_White.png
-          Falls back to original white PNG if missing.
-        -->
         <img src="/uploads/Inc5_White.png"
              alt="Inc.5"
              class="nav-brand-logo"
@@ -84,6 +79,16 @@
 
         <input type="hidden" id="verified_otp"         name="verified_otp"         value="">
         <input type="hidden" id="pre_generated_job_id" name="pre_generated_job_id" value="">
+
+        <!-- These stay hidden for form submission -->
+        <input type="hidden" id="item_id" name="item_id" value="">
+        <input type="hidden" id="division" name="division" value="">
+        <input type="hidden" id="section" name="section" value="">
+        <input type="hidden" id="department" name="department" value="">
+        <input type="hidden" id="category2" name="category2" value="">
+        <input type="hidden" id="category3" name="category3" value="">
+        <input type="hidden" id="category4" name="category4" value="">
+        <input type="hidden" id="rsp" name="rsp" value="">
 
         <!-- ── TOP BAR ── -->
         <div class="jc-top-bar">
@@ -152,22 +157,22 @@
               <span class="status-pill green">✓ Item Found</span>
               <div class="form-row-inline" style="margin-top:8px;">
                 <div class="form-row">
-                  <label for="item_id">Item ID</label>
-                  <input type="text" id="item_id" name="item_id" readonly class="ro-field">
+                  <label for="category2_display">Style</label>
+                  <input type="text" id="category2_display" readonly class="ro-field">
                 </div>
                 <div class="form-row">
-                  <label for="division">Division</label>
-                  <input type="text" id="division" name="division" readonly class="ro-field">
+                  <label for="category3_display">Color</label>
+                  <input type="text" id="category3_display" readonly class="ro-field">
                 </div>
               </div>
               <div class="form-row-inline">
                 <div class="form-row">
-                  <label for="section">Section</label>
-                  <input type="text" id="section" name="section" readonly class="ro-field">
+                  <label for="category4_display">Size</label>
+                  <input type="text" id="category4_display" readonly class="ro-field">
                 </div>
                 <div class="form-row">
-                  <label for="department">Department</label>
-                  <input type="text" id="department" name="department" readonly class="ro-field">
+                  <label for="rsp_display">RSP</label>
+                  <input type="text" id="rsp_display" readonly class="ro-field">
                 </div>
               </div>
             </div>
@@ -191,7 +196,7 @@
 
             <div class="form-row-inline">
               <div class="form-row">
-                <label for="product_under_90">Under 90 Days</label>
+                <label for="product_under_90">Under warranty</label>
                 <select id="product_under_90" name="product_under_90" required>
                   <option value="">Select</option>
                   <option value="Yes">Yes</option>
@@ -311,7 +316,6 @@
           <!-- ── COL 3: Warehouse (conditional) + Additional ── -->
           <div class="jc-col">
 
-            <!-- Warehouse section — only shown for Send to Warehouse job type -->
             <div id="warehouseSection" class="hidden">
               <div class="step-heading">
                 <span class="step-badge">4</span>
@@ -424,7 +428,6 @@
               </div>
             </div>
 
-            <!-- Comments: fixed reasonable height, not giant -->
             <div class="form-row comments-grow">
               <label for="comments">Comments</label>
               <textarea id="comments" name="comments"

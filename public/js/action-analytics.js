@@ -7,6 +7,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const isWarehouse = userRole.startsWith("warehouse");
   const isAdmin = userRole === "admin";
 
+  const totalCols = 12 + (isStore ? 1 : 0) + (isAdmin ? 1 : 0);
+
   const yearSelect = document.getElementById("yearFilter");
   const curYear = new Date().getFullYear();
   for (let y = curYear - 3; y <= curYear + 3; y++) {
@@ -62,6 +64,10 @@ document.addEventListener("DOMContentLoaded", () => {
     Store_Sent_Date: ae("ae_Store_Sent_Date"),
     Store_Received_Date: ae("ae_Store_Received_Date"),
     Closing_Ticket_Remarks: ae("ae_Closing_Ticket_Remarks"),
+    Merchandise_Decision: ae("ae_Merchandise_Decision"),
+    Merchandise_Action: ae("ae_Merchandise_Action"),
+    Return_Store_AWB: ae("ae_Return_Store_AWB"),
+    Return_Store_Remarks: ae("ae_Return_Store_Remarks"),
     AdminNote: ae("ae_AdminNote"),
   };
 
@@ -75,14 +81,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const whDispatchInput = document.getElementById("wh_dispatch_date");
   const whRemarksInput = document.getElementById("wh_remarks");
   const whAttachFileInput = document.getElementById("wh_attach_file_transfer");
-  const whTransferPreviewWrap = document.getElementById(
-    "whTransferPreviewWrap",
-  );
+  const whTransferPreviewWrap = document.getElementById("whTransferPreviewWrap");
   const whTransferPreviewImg = document.getElementById("whTransferPreviewImg");
   const whTransferFileLabel = document.getElementById("whTransferFileLabel");
-  const clearWhTransferAttach = document.getElementById(
-    "clearWhTransferAttach",
-  );
+  const clearWhTransferAttach = document.getElementById("clearWhTransferAttach");
   const whExistingAttach = document.getElementById("whExistingAttach");
   const whExistingLabel = document.getElementById("whExistingLabel");
   const whViewExistingBtn = document.getElementById("whViewExistingBtn");
@@ -118,30 +120,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const vendorDecisionModal = document.getElementById("vendorDecisionModal");
   const vendorDecisionJobId = document.getElementById("vendorDecisionJobId");
-  const vendorDecisionSelect = document.getElementById(
-    "vendor_decision_select",
-  );
+  const vendorDecisionSelect = document.getElementById("vendor_decision_select");
   const vendorDecisionDate = document.getElementById("vendor_decision_date");
   const vendorDecisionError = document.getElementById("vendorDecisionError");
-  const confirmVendorDecisionBtn = document.getElementById(
-    "confirmVendorDecisionBtn",
-  );
-  const cancelVendorDecisionBtn = document.getElementById(
-    "cancelVendorDecisionBtn",
-  );
-  const closeVendorDecisionModal = document.getElementById(
-    "closeVendorDecisionModal",
-  );
+  const confirmVendorDecisionBtn = document.getElementById("confirmVendorDecisionBtn");
+  const cancelVendorDecisionBtn = document.getElementById("cancelVendorDecisionBtn");
+  const closeVendorDecisionModal = document.getElementById("closeVendorDecisionModal");
 
   const returnStoreModal = document.getElementById("returnStoreModal");
   const returnStoreJobId = document.getElementById("returnStoreJobId");
-  const confirmReturnStoreBtn = document.getElementById(
-    "confirmReturnStoreBtn",
-  );
+  const returnStoreAwbInput = document.getElementById("return_store_awb");
+  const returnStoreRemarksInput = document.getElementById("return_store_remarks");
+  const returnStoreError = document.getElementById("returnStoreError");
+  const confirmReturnStoreBtn = document.getElementById("confirmReturnStoreBtn");
   const cancelReturnStoreBtn = document.getElementById("cancelReturnStoreBtn");
-  const closeReturnStoreModal = document.getElementById(
-    "closeReturnStoreModal",
-  );
+  const closeReturnStoreModal = document.getElementById("closeReturnStoreModal");
 
   const deliveryModal = document.getElementById("deliveryModal");
   const deliveryJobIdEl = document.getElementById("deliveryJobId");
@@ -149,6 +142,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const saveDeliveryBtn = document.getElementById("saveDeliveryBtn");
   const closeDeliveryModal = document.getElementById("closeDeliveryModal");
   const cancelDeliveryBtn = document.getElementById("cancelDeliveryBtn");
+
+  const merchDecisionModal = document.getElementById("merchDecisionModal");
+  const merchDecisionJobId = document.getElementById("merchDecisionJobId");
+  const merchDecisionSelect = document.getElementById("merchDecisionSelect");
+  const merchActionSelect = document.getElementById("merchActionSelect");
+  const merchDecisionError = document.getElementById("merchDecisionError");
+  const merchProceedOtpBtn = document.getElementById("merchProceedOtpBtn");
+  const closeMerchDecisionModal = document.getElementById("closeMerchDecisionModal");
+  const cancelMerchDecisionBtn = document.getElementById("cancelMerchDecisionBtn");
 
   const closeTicketModal = document.getElementById("closeTicketModal");
   const closeJobIdEl = document.getElementById("closeJobId");
@@ -162,6 +164,154 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeJobForWh = null;
   let activeJobForAdmin = null;
   const jobMap = {};
+
+  let pendingMerchDecision = "";
+  let pendingMerchAction = "";
+
+  // ══════════════════════════════════════════════════════════
+  // SCANNER-ONLY AWB FIELDS
+  // Prevents manual keyboard typing; accepts only barcode/QR
+  // scanner input (which fires chars very rapidly, < 80ms apart)
+  // ══════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════
+  // SMART AWB SCAN FIELDS
+  // — Prefers scanner input (fast chars < 80ms apart)
+  // — If user types manually (slow), still allowed BUT value
+  //   gets " - Typed" suffix appended on blur/submit so DB
+  //   and receipt always show e.g. "ABC123 - Typed"
+  // — Gate Pass fields are intentionally NOT in this list
+  //   (they remain normal free-text inputs)
+  // ══════════════════════════════════════════════════════════
+  const AWB_SCAN_IDS = [
+    "wh_awb",
+    "vendor_awb",
+    "return_store_awb",
+    "ae_AWB",
+    "ae_Vendor_Awb",
+    "ae_Return_Store_AWB",
+  ];
+
+  const SCAN_SPEED_MS  = 80;   // scanner chars arrive < 80ms apart
+  const TYPED_SUFFIX   = " - Typed";
+  const _scanBuf       = {};
+  const _scanTmr       = {};
+  const _lastKey       = {};
+  const _isScanned     = {}; // true = value came from scanner
+  const _scanInited    = new Set();
+
+  // Commit a scanner-originated value (no suffix)
+  function commitScan(el, value) {
+    _isScanned[el.id] = true;
+    // Strip any existing " - Typed" suffix if user previously typed
+    const clean = value.replace(/ - Typed$/i, "").trim();
+    el.value = clean;
+    el.dispatchEvent(new Event("input",  { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    // Green flash
+    el.style.borderColor = "#16a34a";
+    el.style.background  = "#f0fdf4";
+    el.style.color       = "#15803d";
+    setTimeout(() => {
+      el.style.borderColor = "";
+      el.style.background  = "";
+      el.style.color       = "";
+    }, 1400);
+  }
+
+  // Append " - Typed" suffix when user manually types and leaves field
+  function applyTypedSuffix(el) {
+    const raw = el.value.trim();
+    if (!raw) return; // empty — leave alone
+    if (_isScanned[el.id]) return; // came from scanner — no suffix
+    // Already has suffix — don't double-add
+    if (raw.endsWith(" - Typed")) return;
+    el.value = raw + " - Typed";
+  }
+
+  // Strip suffix so user can edit without seeing it while typing
+  function stripTypedSuffix(el) {
+    el.value = el.value.replace(/ - Typed$/i, "");
+    // Once user starts editing, mark as typed (not scanned)
+    _isScanned[el.id] = false;
+  }
+
+  function initScanField(id) {
+    const el = document.getElementById(id);
+    if (!el || _scanInited.has(id)) return;
+    _scanInited.add(id);
+
+    _scanBuf[id]  = "";
+    _scanTmr[id]  = null;
+    _lastKey[id]  = 0;
+    _isScanned[id] = false;
+
+    el.setAttribute("autocomplete", "off");
+
+    // On focus: strip suffix so editing is clean; reset scan flag
+    el.addEventListener("focus", () => {
+      stripTypedSuffix(el);
+    });
+
+    // On blur: if not scanned, add " - Typed" suffix
+    el.addEventListener("blur", () => {
+      applyTypedSuffix(el);
+    });
+
+    el.addEventListener("keydown", (e) => {
+      const now = Date.now();
+      const gap = now - (_lastKey[id] || 0);
+      _lastKey[id] = now;
+
+      // ENTER → scanner finished → commit clean value
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const val = _scanBuf[id].trim();
+        if (val) {
+          commitScan(el, val);
+        }
+        _scanBuf[id] = "";
+        clearTimeout(_scanTmr[id]);
+        return;
+      }
+
+      // Backspace / Delete — always allow
+      if (e.key === "Backspace" || e.key === "Delete") {
+        _isScanned[id] = false;
+        return;
+      }
+
+      // Detect scanner: chars arrive faster than SCAN_SPEED_MS
+      if (e.key.length === 1) {
+        if (gap < SCAN_SPEED_MS) {
+          // Fast → scanner input accumulation
+          _scanBuf[id] += e.key;
+          // Auto-commit if scanner sends no Enter after 150ms silence
+          clearTimeout(_scanTmr[id]);
+          _scanTmr[id] = setTimeout(() => {
+            const val = _scanBuf[id].trim();
+            if (val) commitScan(el, val);
+            _scanBuf[id] = "";
+          }, 150);
+        } else {
+          // Slow → manual typing — clear any stale scan buffer
+          _scanBuf[id] = "";
+          _isScanned[id] = false;
+          // Let the keypress through normally (user can type freely)
+        }
+      }
+    });
+  }
+
+  // Init all AWB scan fields immediately
+  AWB_SCAN_IDS.forEach(initScanField);
+
+  // Re-init after each modal opens
+  function reinitScanFields() {
+    AWB_SCAN_IDS.forEach(initScanField);
+  }
+  // ══════════════════════════════════════════════════════════
+  // END SCANNER LOGIC
+  // ══════════════════════════════════════════════════════════
 
   function bindClose(modal, closeFn) {
     if (!modal) return;
@@ -268,6 +418,14 @@ document.addEventListener("DOMContentLoaded", () => {
     return `<a class="btn-view-attach" href="/api/analytics/attachment/${encodeURIComponent(jobId)}" target="_blank" rel="noopener noreferrer"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>View</a>`;
   }
 
+  function receiptCell(job) {
+    if (!isStore) return "";
+    const status = (job.Status || "").toLowerCase().trim();
+    if (status === "closed") return `<span class="no-attach">—</span>`;
+    if (!job.WarehouseID) return `<span class="no-attach">—</span>`;
+    return `<a class="btn-receipt-download" href="/api/analytics/receipt/${encodeURIComponent(job.Job_Id)}" target="_blank" rel="noopener noreferrer" title="Download Receipt"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>Receipt</a>`;
+  }
+
   function timelineCell(job) {
     const status = (job.Status || "").toLowerCase().trim();
     const isClosed = status === "closed";
@@ -321,7 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     if (showStoreSent && job.Store_Sent_Date)
       lines.push(
-        `<div class="tl-entry tl-store"><span class="tl-dot"></span><div class="tl-content"><div class="tl-label">WH → Store</div><div class="tl-detail">${job.Store_Sent_Date}</div></div></div>`,
+        `<div class="tl-entry tl-store"><span class="tl-dot"></span><div class="tl-content"><div class="tl-label">WH → Store</div><div class="tl-detail">${job.Store_Sent_Date}</div>${job.Return_Store_AWB ? `<div class="tl-detail">AWB: ${job.Return_Store_AWB}</div>` : ""}${job.Return_Store_Remarks ? `<div class="tl-detail">Remarks: ${job.Return_Store_Remarks}</div>` : ""}</div></div>`,
       );
     if (showStoreReceived && job.Store_Received_Date)
       lines.push(
@@ -391,7 +549,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function loadJobs() {
-    jobTableBody.innerHTML = `<tr><td colspan="${isAdmin ? 14 : 12}" class="table-loading">Loading…</td></tr>`;
+    jobTableBody.innerHTML = `<tr><td colspan="${totalCols}" class="table-loading">Loading…</td></tr>`;
     const params = new URLSearchParams({
       status: statusFilter.value,
       month: monthSelect.value,
@@ -402,7 +560,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch(`/api/analytics/jobs?${params}`);
       const data = await res.json();
       if (!data.success) {
-        jobTableBody.innerHTML = `<tr><td colspan="${isAdmin ? 14 : 12}" class="table-loading">Error loading data.</td></tr>`;
+        jobTableBody.innerHTML = `<tr><td colspan="${totalCols}" class="table-loading">Error loading data.</td></tr>`;
         return;
       }
       kpiTotal.textContent = data.kpi.total;
@@ -412,23 +570,38 @@ document.addEventListener("DOMContentLoaded", () => {
       const yr = yearSelect.value === "all" ? "All Years" : yearSelect.value;
       kpiMeta.textContent = `KPI based on CreatedDate (${yr}${monthSelect.value !== "all" ? " - " + mo : ""})`;
       if (!data.jobs.length) {
-        jobTableBody.innerHTML = `<tr><td colspan="${isAdmin ? 14 : 12}" class="table-loading">No records found.</td></tr>`;
+        jobTableBody.innerHTML = `<tr><td colspan="${totalCols}" class="table-loading">No records found.</td></tr>`;
         return;
       }
       Object.keys(jobMap).forEach((k) => delete jobMap[k]);
       data.jobs.forEach((j) => (jobMap[j.Job_Id] = j));
       jobTableBody.innerHTML = data.jobs
         .map((job) => {
-          const base = `<tr data-jobid="${escAttr(job.Job_Id)}"><td><strong>${job.Job_Id || "—"}</strong></td><td>${job.CustomerNumber || "—"}</td><td>${job.CustomerName || "—"}</td><td>${job.Store_Id || "—"}</td><td>${job.ITEM_ID || "—"}</td><td>${job.ProductUnder90Days || "—"}</td><td>${job.DeliveryDate || "—"}</td><td>${statusBadge(job.Status)}</td><td>${job.Ticket_Closing_Date || "—"}</td><td>${attachCell(job.Job_Id, !!job.Attachment)}</td><td>${timelineCell(job)}</td><td>${actionCell(job)}</td>`;
-          if (!isAdmin) return base + `</tr>`;
-          return (
-            base +
-            `<td>${adminActionsCell(job)}</td><td>${adminLogsCell(job)}</td></tr>`
-          );
+          let row = `<tr data-jobid="${escAttr(job.Job_Id)}">`;
+          row += `<td><strong>${job.Job_Id || "—"}</strong></td>`;
+          row += `<td>${job.CustomerNumber || "—"}</td>`;
+          row += `<td>${job.CustomerName || "—"}</td>`;
+          row += `<td>${job.Store_Id || "—"}</td>`;
+          row += `<td>${job.ITEM_ID || "—"}</td>`;
+          row += `<td>${job.ProductUnder90Days || "—"}</td>`;
+          row += `<td>${job.DeliveryDate || "—"}</td>`;
+          row += `<td>${statusBadge(job.Status)}</td>`;
+          row += `<td>${job.Ticket_Closing_Date || "—"}</td>`;
+          row += `<td>${attachCell(job.Job_Id, !!job.Attachment)}</td>`;
+          row += `<td>${timelineCell(job)}</td>`;
+          row += `<td>${actionCell(job)}</td>`;
+          if (isStore) {
+            row += `<td>${receiptCell(job)}</td>`;
+          }
+          if (isAdmin) {
+            row += `<td>${adminActionsCell(job)}</td><td>${adminLogsCell(job)}</td>`;
+          }
+          row += `</tr>`;
+          return row;
         })
         .join("");
     } catch (e) {
-      jobTableBody.innerHTML = `<tr><td colspan="${isAdmin ? 14 : 12}" class="table-loading">Failed to load. Try again.</td></tr>`;
+      jobTableBody.innerHTML = `<tr><td colspan="${totalCols}" class="table-loading">Failed to load. Try again.</td></tr>`;
     }
   }
 
@@ -480,10 +653,20 @@ document.addEventListener("DOMContentLoaded", () => {
       AE.Store_Sent_Date.value = job.Store_Sent_Date || "";
     if (AE.Store_Received_Date)
       AE.Store_Received_Date.value = job.Store_Received_Date || "";
+    if (AE.Return_Store_AWB)
+      AE.Return_Store_AWB.value = job.Return_Store_AWB || "";
+    if (AE.Return_Store_Remarks)
+      AE.Return_Store_Remarks.value = job.Return_Store_Remarks || "";
+    if (AE.Merchandise_Decision)
+      AE.Merchandise_Decision.value = job.Merchandise_Decision || "";
+    if (AE.Merchandise_Action)
+      AE.Merchandise_Action.value = job.Merchandise_Action || "";
     if (AE.Closing_Ticket_Remarks)
       AE.Closing_Ticket_Remarks.value = job.Closing_Ticket_Remarks || "";
     if (AE.AdminNote) AE.AdminNote.value = "";
     if (adminEditModal) adminEditModal.classList.remove("hidden");
+    // Re-init scan fields inside admin modal after it opens
+    setTimeout(reinitScanFields, 100);
   }
   function closeAdminEdit() {
     if (!adminEditModal) return;
@@ -529,6 +712,10 @@ document.addEventListener("DOMContentLoaded", () => {
       Vendor_Decision_Date: AE.Vendor_Decision_Date?.value || "",
       Store_Sent_Date: AE.Store_Sent_Date?.value || "",
       Store_Received_Date: AE.Store_Received_Date?.value || "",
+      Return_Store_AWB: AE.Return_Store_AWB?.value || "",
+      Return_Store_Remarks: AE.Return_Store_Remarks?.value || "",
+      Merchandise_Decision: AE.Merchandise_Decision?.value || "",
+      Merchandise_Action: AE.Merchandise_Action?.value || "",
       Closing_Ticket_Remarks: AE.Closing_Ticket_Remarks?.value || "",
     };
     adminEditError.classList.add("hidden");
@@ -575,8 +762,6 @@ document.addEventListener("DOMContentLoaded", () => {
     whExistingAttach.classList.add("hidden");
     if (activeJobForWh) {
       const j = activeJobForWh;
-
-      // ✅ FIX: Match by WarehouseID first, fallback to WarehouseName
       if ((j.WarehouseID || j.WarehouseName) && whWarehouseIdSel) {
         let matched = false;
         if (j.WarehouseID) {
@@ -607,7 +792,6 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
       }
-
       if (j.CourierName && whCourierSel) {
         for (let i = 0; i < whCourierSel.options.length; i++) {
           if (whCourierSel.options[i].value === j.CourierName) {
@@ -626,6 +810,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
     whTransferModal.classList.remove("hidden");
+    // Re-init scan fields inside WH modal after it opens
+    setTimeout(reinitScanFields, 100);
   }
   const closeWhTransfer = () => {
     whTransferModal.classList.add("hidden");
@@ -739,7 +925,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ── OTHER MODALS ──
   const closeWhAck = () => {
     if (whAckModal) whAckModal.classList.add("hidden");
     activeJobId = null;
@@ -976,8 +1161,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // ── RETURN TO STORE ──
   const closeReturnStore = () => {
     if (returnStoreModal) returnStoreModal.classList.add("hidden");
+    if (returnStoreError) returnStoreError.classList.add("hidden");
+    if (returnStoreAwbInput) returnStoreAwbInput.value = "";
+    if (returnStoreRemarksInput) returnStoreRemarksInput.value = "";
     activeJobId = null;
   };
   if (closeReturnStoreModal)
@@ -985,26 +1174,47 @@ document.addEventListener("DOMContentLoaded", () => {
   if (cancelReturnStoreBtn)
     cancelReturnStoreBtn.addEventListener("click", closeReturnStore);
   bindClose(returnStoreModal, closeReturnStore);
+
   if (confirmReturnStoreBtn) {
     confirmReturnStoreBtn.addEventListener("click", async () => {
+      if (returnStoreError) returnStoreError.classList.add("hidden");
+      const awbVal = (
+        returnStoreAwbInput ? returnStoreAwbInput.value : ""
+      ).trim();
+      const remarksVal = (
+        returnStoreRemarksInput ? returnStoreRemarksInput.value : ""
+      ).trim();
+      // AWB is optional — no mandatory block
       confirmReturnStoreBtn.disabled = true;
       confirmReturnStoreBtn.textContent = "Saving…";
       try {
         const res = await fetch("/api/analytics/return-to-store", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId: activeJobId }),
+          body: JSON.stringify({
+            jobId: activeJobId,
+            return_awb: awbVal,
+            return_remarks: remarksVal,
+          }),
         });
         const data = await res.json();
         if (data.success) {
           closeReturnStore();
           loadJobs();
-        } else alert(data.message || "Failed.");
+        } else {
+          if (returnStoreError) {
+            returnStoreError.textContent = data.message || "Failed.";
+            returnStoreError.classList.remove("hidden");
+          }
+        }
       } catch {
-        alert("Error.");
+        if (returnStoreError) {
+          returnStoreError.textContent = "Error. Try again.";
+          returnStoreError.classList.remove("hidden");
+        }
       } finally {
         confirmReturnStoreBtn.disabled = false;
-        confirmReturnStoreBtn.textContent = "✅ Yes, Return to Store";
+        confirmReturnStoreBtn.textContent = "✓ Return to Store";
       }
     });
   }
@@ -1105,6 +1315,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       sendVendorModal.classList.remove("hidden");
+      // Re-init scan fields inside vendor modal
+      setTimeout(reinitScanFields, 100);
       return;
     }
     if (action === "vendor-decision") {
@@ -1133,7 +1345,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (action === "return-to-store") {
       returnStoreJobId.textContent = `Job: ${jobId}`;
+      if (returnStoreAwbInput) returnStoreAwbInput.value = "";
+      if (returnStoreRemarksInput) returnStoreRemarksInput.value = "";
+      if (returnStoreError) returnStoreError.classList.add("hidden");
       returnStoreModal.classList.remove("hidden");
+      // Re-init scan fields inside return-to-store modal
+      setTimeout(reinitScanFields, 100);
       return;
     }
     if (action === "update-delivery") {
@@ -1143,14 +1360,60 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if (action === "close-ticket") {
-      closeJobIdEl.textContent = `Job: ${jobId}`;
+      openMerchDecision(jobId);
+      return;
+    }
+  });
+
+  // ── MERCHANDISE DECISION MODAL ──
+  function openMerchDecision(jobId) {
+    activeJobId = jobId;
+    if (merchDecisionJobId) merchDecisionJobId.textContent = `Job: ${jobId}`;
+    if (merchDecisionSelect) merchDecisionSelect.value = "";
+    if (merchActionSelect) merchActionSelect.value = "";
+    if (merchDecisionError) {
+      merchDecisionError.classList.add("hidden");
+      merchDecisionError.textContent = "";
+    }
+    pendingMerchDecision = "";
+    pendingMerchAction = "";
+    if (merchDecisionModal) merchDecisionModal.classList.remove("hidden");
+  }
+  const closeMerchDecision = () => {
+    if (merchDecisionModal) merchDecisionModal.classList.add("hidden");
+    if (merchDecisionError) merchDecisionError.classList.add("hidden");
+  };
+  if (closeMerchDecisionModal)
+    closeMerchDecisionModal.addEventListener("click", closeMerchDecision);
+  if (cancelMerchDecisionBtn)
+    cancelMerchDecisionBtn.addEventListener("click", closeMerchDecision);
+  bindClose(merchDecisionModal, closeMerchDecision);
+
+  if (merchProceedOtpBtn) {
+    merchProceedOtpBtn.addEventListener("click", () => {
+      if (merchDecisionError) merchDecisionError.classList.add("hidden");
+      const decision = (merchDecisionSelect?.value || "").trim();
+      const action = (merchActionSelect?.value || "").trim();
+      if (!decision) {
+        merchDecisionError.textContent = "Please select Merchandise Decision.";
+        merchDecisionError.classList.remove("hidden");
+        return;
+      }
+      if (!action) {
+        merchDecisionError.textContent = "Please select Action.";
+        merchDecisionError.classList.remove("hidden");
+        return;
+      }
+      pendingMerchDecision = decision;
+      pendingMerchAction = action;
+      closeMerchDecision();
+      closeJobIdEl.textContent = `Job: ${activeJobId}`;
       closeRemarks.value = "";
       closeTicketError.classList.add("hidden");
       resetCloseOtpState();
       closeTicketModal.classList.remove("hidden");
-      return;
-    }
-  });
+    });
+  }
 
   // ── DELIVERY MODAL ──
   const closeDelivModal = () => {
@@ -1187,16 +1450,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ────────────────────────────────────────────────
-  // CLOSE TICKET MODAL + OTP FLOW
-  // ────────────────────────────────────────────────
+  // ── CLOSE TICKET MODAL + OTP FLOW ──
   let closeOtpSent = false;
   let closeOtpVerified = false;
   let closeVerifiedOtpValue = "";
   let closeOtpPhoneValue = "";
   let closeOtpTimerInterval = null;
   let closeOtpSeconds = 300;
-
   const closeOtpSection = document.getElementById("closeOtpSection");
   const closeOtpPhoneEl = document.getElementById("closeOtpPhone");
   const closeOtpTimerEl = document.getElementById("closeOtpTimer");
@@ -1238,6 +1498,8 @@ document.addEventListener("DOMContentLoaded", () => {
     activeJobId = null;
     resetCloseOtpState();
     if (closeRemarks) closeRemarks.value = "";
+    pendingMerchDecision = "";
+    pendingMerchAction = "";
   };
   closeTicketModalBtn.addEventListener("click", closeCloseModal);
   cancelCloseBtn.addEventListener("click", closeCloseModal);
@@ -1263,7 +1525,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }, 1000);
   }
-
   function updateCloseTimerDisplay() {
     if (!closeOtpTimerEl) return;
     const m = Math.floor(closeOtpSeconds / 60);
@@ -1397,8 +1658,6 @@ document.addEventListener("DOMContentLoaded", () => {
       closeTicketError.classList.remove("hidden");
       return;
     }
-
-    // Phase 1: Send OTP
     if (!closeOtpSent) {
       confirmCloseBtn.disabled = true;
       confirmCloseBtn.textContent = "Sending OTP…";
@@ -1407,14 +1666,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!success) confirmCloseBtn.textContent = "Send OTP & Close";
       return;
     }
-
-    // Phase 2: Close with verified OTP
     if (!closeOtpVerified) {
       closeTicketError.textContent = "Please enter and verify the 6-digit OTP.";
       closeTicketError.classList.remove("hidden");
       return;
     }
-
     confirmCloseBtn.disabled = true;
     confirmCloseBtn.textContent = "Closing…";
     try {
@@ -1425,6 +1681,8 @@ document.addEventListener("DOMContentLoaded", () => {
           jobId: activeJobId,
           verified_otp: closeVerifiedOtpValue,
           closing_remarks: remarks,
+          merchandise_decision: pendingMerchDecision,
+          merchandise_action: pendingMerchAction,
         }),
       });
       const data = await res.json();
@@ -1444,7 +1702,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ── Filters ──
   let searchTimer = null;
   searchInput.addEventListener("input", () => {
     clearTimeout(searchTimer);

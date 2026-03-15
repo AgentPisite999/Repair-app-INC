@@ -390,13 +390,10 @@
 //   cleanExpiredOTPs,
 // };
 
-
-
 const { Pool } = require("pg");
 const { Connector } = require("@google-cloud/cloud-sql-connector");
 const { GoogleAuth } = require("google-auth-library");
 
-// Build Service Account credentials from env
 const credentials = {
   type: process.env.GSA_TYPE,
   project_id: process.env.GSA_PROJECT_ID,
@@ -411,7 +408,6 @@ const credentials = {
   universe_domain: process.env.GSA_UNIVERSE_DOMAIN,
 };
 
-// GoogleAuth with explicit credentials and scope
 const auth = new GoogleAuth({
   credentials,
   scopes: ["https://www.googleapis.com/auth/sqlservice.admin"],
@@ -468,7 +464,7 @@ const getISTDate = (offsetMs = 0) => {
 const addColumnIfMissing = async (client, table, column, type = "TEXT") => {
   try {
     await client.query(
-      `ALTER TABLE repair_app.${table} ADD COLUMN IF NOT EXISTS ${column} ${type}`
+      `ALTER TABLE repair_app.${table} ADD COLUMN IF NOT EXISTS ${column} ${type}`,
     );
   } catch (err) {
     console.error(`Error adding ${column} to ${table}:`, err);
@@ -478,7 +474,6 @@ const addColumnIfMissing = async (client, table, column, type = "TEXT") => {
 const initializeDatabase = async () => {
   const db = await getPool();
 
-  // Test connection
   const ping = await db.query("SELECT NOW()");
   console.log("✓ Connected to Cloud SQL PostgreSQL");
   console.log(`✓ Database: ${process.env.DB_NAME}`);
@@ -492,7 +487,6 @@ const initializeDatabase = async () => {
     await client.query(`CREATE SCHEMA IF NOT EXISTS repair_app`);
     await client.query(`SET search_path TO repair_app, public`);
 
-    // Users
     await client.query(`
       CREATE TABLE IF NOT EXISTS repair_app.users (
         id SERIAL PRIMARY KEY,
@@ -504,24 +498,42 @@ const initializeDatabase = async () => {
     `);
     console.log("✓ Users table ready");
 
-    // Item_Master
     await client.query(`
-      CREATE TABLE IF NOT EXISTS repair_app."Item_Master" (
-        id SERIAL PRIMARY KEY,
-        barcode TEXT UNIQUE,
-        item_code TEXT,
-        division TEXT,
-        section TEXT,
-        department TEXT,
-        active TEXT,
-        created_by TEXT,
-        creation_date TEXT DEFAULT TO_CHAR(NOW() AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS'),
-        remarks TEXT
-      )
-    `);
+  CREATE TABLE IF NOT EXISTS repair_app."Item_Master" (
+    id SERIAL PRIMARY KEY,
+    barcode TEXT UNIQUE,
+    item_code TEXT,
+    division TEXT,
+    section TEXT,
+    department TEXT,
+    article_name TEXT,
+    item_wsp TEXT,
+    created_on TEXT,
+    category1 TEXT,
+    category2 TEXT,
+    category3 TEXT,
+    category4 TEXT,
+    category5 TEXT,
+    mrp TEXT,
+    rsp TEXT,
+    wsp TEXT,
+    standard_rate TEXT,
+    string_desc1 TEXT,
+    string_desc2 TEXT,
+    string_desc3 TEXT,
+    string_desc4 TEXT,
+    string_desc5 TEXT,
+    string_desc6 TEXT,
+    hsn_code TEXT,
+    last_modify TEXT,
+    active TEXT,
+    created_by TEXT,
+    creation_date TEXT DEFAULT TO_CHAR(NOW() AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS'),
+    remarks TEXT
+  )
+`);
     console.log("✓ Item_Master ready");
 
-    // Customer_Master
     await client.query(`
       CREATE TABLE IF NOT EXISTS repair_app."Customer_Master" (
         id SERIAL PRIMARY KEY,
@@ -544,7 +556,6 @@ const initializeDatabase = async () => {
     `);
     console.log("✓ Customer_Master ready");
 
-    // Store_Master
     await client.query(`
       CREATE TABLE IF NOT EXISTS repair_app."Store_Master" (
         id SERIAL PRIMARY KEY,
@@ -559,7 +570,6 @@ const initializeDatabase = async () => {
     `);
     console.log("✓ Store_Master ready");
 
-    // Damage_Reason_Master
     await client.query(`
       CREATE TABLE IF NOT EXISTS repair_app."Damage_Reason_Master" (
         id SERIAL PRIMARY KEY,
@@ -570,7 +580,6 @@ const initializeDatabase = async () => {
     `);
     console.log("✓ Damage_Reason_Master ready");
 
-    // Warehouse_Master
     await client.query(`
       CREATE TABLE IF NOT EXISTS repair_app."Warehouse_Master" (
         id SERIAL PRIMARY KEY,
@@ -584,7 +593,6 @@ const initializeDatabase = async () => {
     `);
     console.log("✓ Warehouse_Master ready");
 
-    // Vendor_Master
     await client.query(`
       CREATE TABLE IF NOT EXISTS repair_app."Vendor_Master" (
         id SERIAL PRIMARY KEY,
@@ -600,7 +608,6 @@ const initializeDatabase = async () => {
     `);
     console.log("✓ Vendor_Master ready");
 
-    // Courier_Master
     await client.query(`
       CREATE TABLE IF NOT EXISTS repair_app."Courier_Master" (
         id SERIAL PRIMARY KEY,
@@ -613,7 +620,6 @@ const initializeDatabase = async () => {
     `);
     console.log("✓ Courier_Master ready");
 
-    // OTP Store
     await client.query(`
       CREATE TABLE IF NOT EXISTS repair_app.otp_store (
         id SERIAL PRIMARY KEY,
@@ -627,7 +633,6 @@ const initializeDatabase = async () => {
     `);
     console.log("✓ otp_store table ready");
 
-    // job_data
     await client.query(`
       CREATE TABLE IF NOT EXISTS repair_app.job_data (
         id SERIAL PRIMARY KEY,
@@ -638,6 +643,10 @@ const initializeDatabase = async () => {
         "DIVISION" TEXT,
         "SECTION" TEXT,
         "DEPARTMENT" TEXT,
+        "Category2" TEXT,
+        "Category3" TEXT,
+        "Category4" TEXT,
+        "RSP" TEXT,
         "ItemRemarks" TEXT,
         "ItemCreation_Date" TEXT,
         "ProductUnder90Days" TEXT,
@@ -677,13 +686,33 @@ const initializeDatabase = async () => {
         "Closing_Ticket_Remarks" TEXT,
         "Warehouse_Sent_Date" TEXT,
         "admin_logs" TEXT,
+        "Merchandise_Decision" TEXT,
+        "Merchandise_Action" TEXT,
+        "Return_Store_AWB" TEXT,
+        "Return_Store_Remarks" TEXT,
         "Status" TEXT DEFAULT 'Open',
         "CreatedAt" TEXT DEFAULT TO_CHAR(NOW() AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD HH24:MI:SS')
       )
     `);
     console.log("✓ job_data table ready");
 
+    // RM_Data
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS repair_app."RM_Data" (
+        id SERIAL PRIMARY KEY,
+        "Store_Code" TEXT,
+        "Branch_Name" TEXT,
+        "Zone" TEXT,
+        "RM" TEXT
+      )
+    `);
+    console.log("✓ RM_Data table ready");
+
     const migrations = [
+      "Category2",
+      "Category3",
+      "Category4",
+      "RSP",
       "Store_Id",
       "Warehouse_Receive_Date",
       "Vendor_Name",
@@ -698,6 +727,10 @@ const initializeDatabase = async () => {
       "Closing_Ticket_Remarks",
       "Warehouse_Sent_Date",
       "admin_logs",
+      "Merchandise_Decision",
+      "Merchandise_Action",
+      "Return_Store_AWB",
+      "Return_Store_Remarks",
     ];
 
     for (const col of migrations) {
@@ -705,7 +738,7 @@ const initializeDatabase = async () => {
     }
 
     const result = await client.query(
-      "SELECT COUNT(*) as count FROM repair_app.users"
+      "SELECT COUNT(*) as count FROM repair_app.users",
     );
     console.log(`✓ Total users: ${result.rows[0].count}`);
 
@@ -724,7 +757,6 @@ const initializeDatabase = async () => {
   }
 };
 
-// Clean expired OTPs
 const cleanExpiredOTPs = async () => {
   const p = await getPool();
   const istNow = getISTTimestamp();
@@ -738,7 +770,6 @@ const cleanExpiredOTPs = async () => {
   }
 };
 
-// Wrapper so other files can do db.query()
 const dbProxy = {
   query: async (...args) => {
     const p = await getPool();

@@ -700,6 +700,203 @@ body {
   text-align: right;
 }
 
+/* ── Multi-select checkbox styles ── */
+.da-ss-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: #4a3728;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.da-ss-option:hover {
+  background: #faf5f0;
+}
+
+.da-ss-option-checked {
+  background: #f5ede4;
+}
+
+.da-ss-checkbox {
+  display: none;
+}
+
+.da-ss-checkmark {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border: 2px solid #c4a882;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  background: #fff;
+}
+
+.da-ss-checkbox:checked + .da-ss-checkmark {
+  background: #8b5e3c;
+  border-color: #8b5e3c;
+}
+
+.da-ss-checkbox:checked + .da-ss-checkmark::after {
+  content: "✓";
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.da-ss-option-all {
+  border-bottom: 1px solid #ece3d8;
+  font-weight: 600;
+}
+
+/* ── 3x2 grid ── */
+.da-charts-grid {
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* ── Chart header actions ── */
+.da-chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.da-chart-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.da-chart-dl-btn,
+.da-chart-fs-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--text-mid);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+  line-height: 1;
+}
+.da-chart-dl-btn:hover,
+.da-chart-fs-btn:hover {
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* ── Fullscreen modal ── */
+.da-fs-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+.da-fs-modal.hidden {
+  display: none;
+}
+.da-fs-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--navy);
+  color: #fff;
+  border-radius: 4px 4px 0 0;
+  font-family: "Cormorant Garamond", serif;
+  font-size: 18px;
+  font-weight: 600;
+}
+.da-fs-modal-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.da-fs-modal-close:hover {
+  background: var(--red);
+}
+.da-fs-modal-body {
+  flex: 1;
+  background: var(--surface);
+  border-radius: 0 0 4px 4px;
+  padding: 20px;
+  position: relative;
+  min-height: 0;
+}
+.da-fs-modal-body canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ── Action buttons (Graphs PDF, Raw Data) ── */
+.da-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--red-border);
+  background: var(--surface);
+  color: var(--red);
+  font-size: 11px;
+  font-family: "Jost", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  align-self: flex-end;
+}
+.da-action-btn:hover {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+}
+.da-action-btn:hover svg {
+  fill: #fff;
+}
+.da-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.da-action-btn svg {
+  fill: var(--red);
+  transition: fill 0.2s;
+}
+
+@media (max-width: 1100px) {
+  .da-charts-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+  }
+}
+@media (max-width: 900px) {
+  .da-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
 /* ══════════════════════════
    RESPONSIVE
 ══════════════════════════ */

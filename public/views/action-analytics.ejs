@@ -16,7 +16,6 @@
 
   <div class="dashboard-container">
 
-    <!-- ══ NAVBAR ══ -->
     <nav class="navbar">
       <div class="nav-brand">
         <img src="/uploads/Inc5_White.png"
@@ -71,7 +70,6 @@
 
     <main class="main-content aa-main">
 
-      <!-- ── FILTER BAR ── -->
       <div class="aa-filter-bar">
         <div class="filter-group">
           <label for="statusFilter">Status</label>
@@ -132,7 +130,6 @@
         </button>
       </div>
 
-      <!-- ── KPI STRIP ── -->
       <div class="kpi-strip">
         <div class="kpi-card">
           <div class="kpi-icon">
@@ -170,7 +167,6 @@
         <span class="kpi-meta" id="kpiMeta"></span>
       </div>
 
-      <!-- ── TABLE ── -->
       <div class="aa-table-wrap">
         <table class="aa-table">
           <thead>
@@ -180,13 +176,16 @@
               <th>Customer</th>
               <th>Store ID</th>
               <th>Item ID</th>
-              <th>Under 90</th>
+              <th>Under Warranty</th>
               <th>Delivery Date</th>
               <th>Status</th>
               <th>Closed Date</th>
               <th>Attachment</th>
               <th>WH / Vendor Timeline</th>
               <th>Action</th>
+              <% if (isStore) { %>
+                <th>Receipt</th>
+              <% } %>
               <% if (isAdmin) { %>
                 <th>Admin</th>
               <% } %>
@@ -194,17 +193,16 @@
           </thead>
           <tbody id="jobTableBody">
             <tr>
-              <td colspan="<%= isAdmin ? 13 : 12 %>" class="table-loading">
+              <td colspan="<%= isAdmin ? 13 : (isStore ? 13 : 12) %>" class="table-loading">
                 Loading jobs…
               </td>
             </tr>
           </tbody>
         </table>
 
-        <!-- Empty state template — JS can clone & insert when 0 results -->
         <template id="emptyStateTpl">
           <tr class="table-empty">
-            <td colspan="<%= isAdmin ? 13 : 12 %>">
+            <td colspan="<%= isAdmin ? 13 : (isStore ? 13 : 12) %>">
               <div class="empty-state">
                 <div class="empty-state-icon">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -222,9 +220,9 @@
     </main>
   </div>
 
-  <!-- ════════════════════════════════════════
-       ADMIN EDIT MODAL
-  ════════════════════════════════════════ -->
+  <%# ═══════════════════════════════════════ %>
+  <%# ADMIN EDIT MODAL %>
+  <%# ═══════════════════════════════════════ %>
   <% if (isAdmin) { %>
   <div id="adminEditModal" class="modal-overlay hidden">
     <div class="modal-box modal-box-lg">
@@ -246,19 +244,52 @@
           <div class="wh-form-row"><label>Warehouse ID</label><input type="text" id="ae_WarehouseID"></div>
           <div class="wh-form-row"><label>Warehouse Name</label><input type="text" id="ae_WarehouseName"></div>
           <div class="wh-form-row"><label>Courier Name</label><input type="text" id="ae_CourierName"></div>
-          <div class="wh-form-row"><label>AWB</label><input type="text" id="ae_AWB"></div>
+
+          <%# AWB — scan / type %>
+          <div class="wh-form-row">
+            <label>AWB</label>
+            <div class="scan-field-wrap">
+              <input type="text" id="ae_AWB" placeholder="🔍 Scan or type AWB…" autocomplete="off">
+              <span class="scan-badge">Scan / Type</span>
+            </div>
+          </div>
+
           <div class="wh-form-row"><label>Dispatch Date</label><input type="date" id="ae_DispatchDate"></div>
           <div class="wh-form-row"><label>Warehouse Receive Date</label><input type="text" id="ae_Warehouse_Receive_Date" placeholder="YYYY-MM-DD HH:MM:SS"></div>
           <div class="wh-form-row"><label>Warehouse Remarks</label><textarea id="ae_WarehouseRemarks"></textarea></div>
           <div class="wh-form-row"><label>Warehouse Sent Date</label><input type="text" id="ae_Warehouse_Sent_Date" placeholder="YYYY-MM-DD HH:MM:SS"></div>
           <div class="wh-form-row"><label>Vendor Name</label><input type="text" id="ae_Vendor_Name"></div>
-          <div class="wh-form-row"><label>Vendor AWB</label><input type="text" id="ae_Vendor_Awb"></div>
-          <div class="wh-form-row"><label>Gate Pass No</label><input type="text" id="ae_Gate_Pass_No"></div>
+
+          <%# Vendor AWB — scan / type %>
+          <div class="wh-form-row">
+            <label>Vendor AWB</label>
+            <div class="scan-field-wrap">
+              <input type="text" id="ae_Vendor_Awb" placeholder="🔍 Scan or type AWB…" autocomplete="off">
+              <span class="scan-badge">Scan / Type</span>
+            </div>
+          </div>
+
+          <%# Gate Pass — normal text input, no scanner %>
+          <div class="wh-form-row"><label>Gate Pass No</label><input type="text" id="ae_Gate_Pass_No" placeholder="Enter gate pass number"></div>
+
           <div class="wh-form-row"><label>Vendor Sent Date</label><input type="date" id="ae_Vendor_Sent_Date"></div>
           <div class="wh-form-row"><label>Vendor Decision</label><input type="text" id="ae_Vendor_Decision" placeholder="Repaired / Replaced…"></div>
           <div class="wh-form-row"><label>Vendor Decision Date</label><input type="date" id="ae_Vendor_Decision_Date"></div>
           <div class="wh-form-row"><label>Store Sent Date</label><input type="text" id="ae_Store_Sent_Date" placeholder="YYYY-MM-DD HH:MM:SS"></div>
           <div class="wh-form-row"><label>Store Received Date</label><input type="text" id="ae_Store_Received_Date" placeholder="YYYY-MM-DD HH:MM:SS"></div>
+
+          <%# Return Store AWB — scan / type %>
+          <div class="wh-form-row">
+            <label>Return Store AWB</label>
+            <div class="scan-field-wrap">
+              <input type="text" id="ae_Return_Store_AWB" placeholder="🔍 Scan or type AWB…" autocomplete="off">
+              <span class="scan-badge">Scan / Type</span>
+            </div>
+          </div>
+
+          <div class="wh-form-row"><label>Return Store Remarks</label><textarea id="ae_Return_Store_Remarks"></textarea></div>
+          <div class="wh-form-row"><label>Merchandise Decision</label><input type="text" id="ae_Merchandise_Decision"></div>
+          <div class="wh-form-row"><label>Merchandise Action</label><input type="text" id="ae_Merchandise_Action"></div>
           <div class="wh-form-row"><label>Closing Remarks</label><textarea id="ae_Closing_Ticket_Remarks"></textarea></div>
           <div class="wh-form-row" style="grid-column: 1/-1;">
             <label>Admin Note (why edit?) <span class="req">*</span></label>
@@ -275,9 +306,9 @@
   </div>
   <% } %>
 
-  <!-- ════════════════════════════════════════
-       STORE MODALS
-  ════════════════════════════════════════ -->
+  <%# ═══════════════════════════════════════ %>
+  <%# STORE MODALS %>
+  <%# ═══════════════════════════════════════ %>
   <% if (isStore) { %>
   <div id="whTransferModal" class="modal-overlay hidden">
     <div class="modal-box modal-box-wh">
@@ -310,9 +341,13 @@
             </select>
           </div>
           <div class="wh-form-row-inline">
+            <%# WH AWB — scan / type %>
             <div class="wh-form-row">
-              <label for="wh_awb">AWB No.</label>
-              <input type="text" id="wh_awb" name="awb" placeholder="AWB number">
+              <label>AWB No.</label>
+              <div class="scan-field-wrap">
+                <input type="text" id="wh_awb" name="awb" placeholder="🔍 Scan or type AWB…" autocomplete="off">
+                <span class="scan-badge">Scan / Type</span>
+              </div>
             </div>
             <div class="wh-form-row">
               <label for="wh_dispatch_date">Dispatch Date</label>
@@ -348,8 +383,8 @@
           <div id="whTransferError" class="modal-error hidden"></div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="saveWhDraftBtn">Save Draft</button>
-          <button type="submit" class="btn-primary btn-warehouse" id="sendToWarehouseBtn">Send to Warehouse</button>
+          <button type="button" class="btn-secondary" id="saveWhDraftBtn">💾 Save Draft</button>
+          <button type="submit" class="btn-primary btn-warehouse" id="sendToWarehouseBtn">🏭 Send to Warehouse</button>
           <button type="button" class="btn-secondary" id="cancelWhTransferBtn">Cancel</button>
         </div>
       </form>
@@ -374,9 +409,9 @@
   </div>
   <% } %>
 
-  <!-- ════════════════════════════════════════
-       WAREHOUSE MODALS
-  ════════════════════════════════════════ -->
+  <%# ═══════════════════════════════════════ %>
+  <%# WAREHOUSE MODALS %>
+  <%# ═══════════════════════════════════════ %>
   <% if (isWarehouse) { %>
   <div id="whAckModal" class="modal-overlay hidden">
     <div class="modal-box">
@@ -415,6 +450,7 @@
           </select>
         </div>
         <div class="wh-form-row-inline">
+          <%# Gate Pass — normal text input, no scanner %>
           <div class="wh-form-row">
             <label for="vendor_gate_pass">Gate Pass No.</label>
             <input type="text" id="vendor_gate_pass" placeholder="Gate pass number">
@@ -424,15 +460,19 @@
             <input type="date" id="vendor_sent_date">
           </div>
         </div>
+        <%# Vendor AWB — scan / type %>
         <div class="wh-form-row">
-          <label for="vendor_awb">AWB No.</label>
-          <input type="text" id="vendor_awb" placeholder="AWB number">
+          <label>AWB No.</label>
+          <div class="scan-field-wrap">
+            <input type="text" id="vendor_awb" placeholder="🔍 Scan or type AWB…" autocomplete="off">
+            <span class="scan-badge">Scan / Type</span>
+          </div>
         </div>
         <div id="sendVendorError" class="modal-error hidden"></div>
       </div>
       <div class="modal-footer">
-        <button class="btn-secondary" id="saveVendorDraftBtn" type="button">Save Draft</button>
-        <button class="btn-primary btn-vendor" id="confirmSendVendorBtn">Send to Vendor</button>
+        <button class="btn-secondary" id="saveVendorDraftBtn" type="button">💾 Save Draft</button>
+        <button class="btn-primary btn-vendor" id="confirmSendVendorBtn">🔧 Send to Vendor</button>
         <button class="btn-secondary" id="cancelSendVendorBtn">Cancel</button>
       </div>
     </div>
@@ -461,33 +501,45 @@
         <div id="vendorDecisionError" class="modal-error hidden"></div>
       </div>
       <div class="modal-footer">
-        <button class="btn-primary" id="confirmVendorDecisionBtn">Confirm Decision</button>
+        <button class="btn-primary" id="confirmVendorDecisionBtn">✅ Confirm Decision</button>
         <button class="btn-secondary" id="cancelVendorDecisionBtn">Cancel</button>
       </div>
     </div>
   </div>
 
+  <%# Return to Store — AWB scan/type, no required %>
   <div id="returnStoreModal" class="modal-overlay hidden">
-    <div class="modal-box">
+    <div class="modal-box modal-box-wh">
       <div class="modal-header">
         <span>Return to Store</span>
         <button type="button" class="modal-close" id="closeReturnStoreModal">✕</button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body wh-modal-body">
         <p class="modal-job-id" id="returnStoreJobId"></p>
-        <p class="modal-confirm-text">Do you want to return this item to the store?</p>
+        <div class="wh-form-row">
+          <label>AWB Number</label>
+          <div class="scan-field-wrap">
+            <input type="text" id="return_store_awb" placeholder="🔍 Scan or type AWB…" autocomplete="off">
+            <span class="scan-badge">Scan / Type</span>
+          </div>
+        </div>
+        <div class="wh-form-row">
+          <label for="return_store_remarks">Remarks</label>
+          <textarea id="return_store_remarks" placeholder="Enter remarks (optional)…"></textarea>
+        </div>
+        <div id="returnStoreError" class="modal-error hidden"></div>
       </div>
       <div class="modal-footer">
-        <button class="btn-primary btn-store" id="confirmReturnStoreBtn">✓ Yes, Return to Store</button>
+        <button class="btn-primary btn-store" id="confirmReturnStoreBtn">✓ Return to Store</button>
         <button type="button" class="btn-secondary" id="cancelReturnStoreBtn">Cancel</button>
       </div>
     </div>
   </div>
   <% } %>
 
-  <!-- ════════════════════════════════════════
-       SHARED: DELIVERY DATE MODAL
-  ════════════════════════════════════════ -->
+  <%# ═══════════════════════════════════════ %>
+  <%# SHARED MODALS (all roles) %>
+  <%# ═══════════════════════════════════════ %>
   <div id="deliveryModal" class="modal-overlay hidden">
     <div class="modal-box">
       <div class="modal-header">
@@ -508,9 +560,39 @@
     </div>
   </div>
 
-  <!-- ════════════════════════════════════════
-       SHARED: CLOSE TICKET WITH OTP
-  ════════════════════════════════════════ -->
+  <div id="merchDecisionModal" class="modal-overlay hidden">
+    <div class="modal-box" style="width:440px;">
+      <div class="modal-header">
+        <span>Merchandise Decision</span>
+        <button type="button" class="modal-close" id="closeMerchDecisionModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-job-id" id="merchDecisionJobId"></p>
+        <div class="wh-form-row">
+          <label for="merchDecisionSelect">Merchandise Decision <span class="req">*</span></label>
+          <select id="merchDecisionSelect" required>
+            <option value="">Select</option>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </div>
+        <div class="wh-form-row" style="margin-top:4px;">
+          <label for="merchActionSelect">Action <span class="req">*</span></label>
+          <select id="merchActionSelect" required>
+            <option value="">Select</option>
+            <option value="Repair">Repair</option>
+            <option value="Replaced">Replaced</option>
+          </select>
+        </div>
+        <div id="merchDecisionError" class="modal-error hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" id="merchProceedOtpBtn">Proceed to Send OTP</button>
+        <button class="btn-secondary" id="cancelMerchDecisionBtn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="closeTicketModal" class="modal-overlay hidden">
     <div class="modal-box" style="width:440px;">
       <div class="modal-header">
@@ -519,12 +601,10 @@
       </div>
       <div class="modal-body">
         <p class="modal-job-id" id="closeJobId"></p>
-
         <div class="wh-form-row">
           <label for="closeRemarks">Closing Remarks <span class="req">*</span></label>
           <textarea id="closeRemarks" class="modal-textarea" placeholder="Enter closing remarks…"></textarea>
         </div>
-
         <div id="closeOtpSection" class="hidden">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
             <span style="font-size:12px;color:var(--text-mid);">OTP sent to <strong id="closeOtpPhone"></strong></span>
@@ -538,7 +618,6 @@
             Resend OTP
           </button>
         </div>
-
         <div id="closeTicketError" class="modal-error hidden"></div>
       </div>
       <div class="modal-footer">

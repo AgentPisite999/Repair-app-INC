@@ -618,8 +618,6 @@
 //   createJob,
 // };
 
-
-
 const {
   db,
   getISTTimestamp,
@@ -637,9 +635,7 @@ const SMS_PE_ID = (process.env.SMS_PE_ID || "").trim();
 const SMS_TEMPLATE_ID_CREATE = (
   process.env.SMS_TEMPLATE_ID_CREATE || ""
 ).trim();
-const SMS_TEMPLATE_ID_CLOSE = (
-  process.env.SMS_TEMPLATE_ID_CLOSE || ""
-).trim();
+const SMS_TEMPLATE_ID_CLOSE = (process.env.SMS_TEMPLATE_ID_CLOSE || "").trim();
 
 const normalizeMobile = (mobile) => {
   const m = mobile.replace(/\D/g, "");
@@ -658,13 +654,13 @@ const generateUniqueJobId = async () => {
 
     const r1 = await db.query(
       `SELECT 1 FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     if (r1.rows.length > 0) continue;
 
     const r2 = await db.query(
       `SELECT 1 FROM repair_app.otp_store WHERE job_id = $1`,
-      [jobId]
+      [jobId],
     );
     if (r2.rows.length > 0) continue;
 
@@ -678,7 +674,7 @@ const generateNextCustomerId = async () => {
      FROM repair_app."Customer_Master"
      WHERE customer_id LIKE 'CUS-%'
      ORDER BY customer_id DESC
-     LIMIT 1`
+     LIMIT 1`,
   );
 
   const row = result.rows[0];
@@ -760,19 +756,19 @@ const renderJobCreation = async (req, res) => {
     const reasonsResult = await db.query(
       `SELECT reason_id AS "ReasonID", reason_name AS "ReasonName"
        FROM repair_app."Damage_Reason_Master"
-       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`
+       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
     );
 
     const whResult = await db.query(
       `SELECT wh_id AS "WhID", warehouse_name AS "WarehouseName"
        FROM repair_app."Warehouse_Master"
-       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`
+       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
     );
 
     const courierResult = await db.query(
       `SELECT courier_id AS "CourierID", courier_name AS "CourierName"
        FROM repair_app."Courier_Master"
-       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`
+       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
     );
 
     res.render("job-creation", {
@@ -797,10 +793,11 @@ const getItemByBarcode = async (req, res) => {
 
   try {
     const result = await db.query(
-      `SELECT barcode, item_code, division, section, department, remarks
+      `SELECT barcode, item_code, division, section, department,
+              category2, category3, category4, rsp, remarks
        FROM repair_app."Item_Master"
        WHERE barcode = $1`,
-      [barcode.trim()]
+      [barcode.trim()],
     );
 
     const row = result.rows[0];
@@ -818,6 +815,10 @@ const getItemByBarcode = async (req, res) => {
         division: row.division,
         section: row.section,
         department: row.department,
+        category2: row.category2 || "",
+        category3: row.category3 || "",
+        category4: row.category4 || "",
+        rsp: row.rsp || "",
         remarks: row.remarks || "",
       },
     });
@@ -840,7 +841,7 @@ const getCustomerByNumber = async (req, res) => {
               whatsapp_ok, sms_ok, email, remarks
        FROM repair_app."Customer_Master"
        WHERE phone = $1`,
-      [customerNumber.trim()]
+      [customerNumber.trim()],
     );
 
     const row = result.rows[0];
@@ -904,7 +905,7 @@ const sendOtp = async (req, res) => {
       `INSERT INTO repair_app.otp_store
        (phone, otp, job_id, customer_name, created_at, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [rawPhone, otp, jobId, custName, istNow, expiresAt]
+      [rawPhone, otp, jobId, custName, istNow, expiresAt],
     );
 
     const message = buildCreationSMS(otp, jobId);
@@ -942,7 +943,7 @@ const sendClosureOtp = async (req, res) => {
       `SELECT "CustomerNumber", "CustomerName", "Status"
        FROM repair_app.job_data
        WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
 
     const job = jobResult.rows[0];
@@ -976,7 +977,7 @@ const sendClosureOtp = async (req, res) => {
     await cleanExpiredOTPs();
     await db.query(
       `DELETE FROM repair_app.otp_store WHERE phone = $1 AND job_id = $2`,
-      [rawPhone, jobId]
+      [rawPhone, jobId],
     );
 
     const otp = generateOTP();
@@ -988,7 +989,7 @@ const sendClosureOtp = async (req, res) => {
       `INSERT INTO repair_app.otp_store
        (phone, otp, job_id, customer_name, created_at, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [rawPhone, otp, jobId, custName, istNow, expiresAt]
+      [rawPhone, otp, jobId, custName, istNow, expiresAt],
     );
 
     const message = buildClosureSMS(otp, jobId);
@@ -1037,7 +1038,7 @@ const verifyOtp = async (req, res) => {
          WHERE phone = $1 AND job_id = $2 AND expires_at > $3
          ORDER BY created_at DESC
          LIMIT 1`,
-        [phone.trim(), jobId, istNow]
+        [phone.trim(), jobId, istNow],
       );
     } else {
       result = await db.query(
@@ -1046,7 +1047,7 @@ const verifyOtp = async (req, res) => {
          WHERE phone = $1 AND expires_at > $2
          ORDER BY created_at DESC
          LIMIT 1`,
-        [phone.trim(), istNow]
+        [phone.trim(), istNow],
       );
     }
 
@@ -1092,6 +1093,10 @@ const createJob = async (req, res) => {
     division,
     section,
     department,
+    category2,
+    category3,
+    category4,
+    rsp,
     item_remarks,
     item_missing,
     product_under_90,
@@ -1137,7 +1142,7 @@ const createJob = async (req, res) => {
        WHERE phone = $1 AND expires_at > $2
        ORDER BY created_at DESC
        LIMIT 1`,
-      [customer_number.trim(), istNow]
+      [customer_number.trim(), istNow],
     );
 
     const otpRow = otpResult.rows[0];
@@ -1184,7 +1189,7 @@ const createJob = async (req, res) => {
           req.session.userIdDisplay || "system",
           istNow,
           (item_remarks || "").trim(),
-        ]
+        ],
       );
     }
 
@@ -1209,7 +1214,7 @@ const createJob = async (req, res) => {
           (customer_remarks || "").trim(),
           req.session.userIdDisplay || "system",
           istNow,
-        ]
+        ],
       );
       console.log(`✓ New customer: ${newCustomerId}`);
     }
@@ -1217,13 +1222,14 @@ const createJob = async (req, res) => {
     const sql = `
       INSERT INTO repair_app.job_data (
         "Job_Id", "JobType", "BARCODE", "ITEM_ID", "DIVISION", "SECTION", "DEPARTMENT",
+        "Category2", "Category3", "Category4", "RSP",
         "ItemRemarks", "ItemCreation_Date", "ProductUnder90Days", "DamageReason",
         "DamageRemarks", "DeliveryDate", "CustomerNumber", "CustomerName", "Email",
         "Pincode", "City", "State", "Address", "WhatsAppOK", "SMSOK", "CustomerRemarks",
         "WarehouseID", "WarehouseName", "CourierName", "AWB", "DispatchDate",
         "WarehouseRemarks", "WarehouseAttachment", "Attachment", "Comments",
         "Store_Id", "Status", "CreatedAt"
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)
     `;
 
     const values = [
@@ -1234,6 +1240,10 @@ const createJob = async (req, res) => {
       (division || "").trim(),
       (section || "").trim(),
       (department || "").trim(),
+      (category2 || "").trim(),
+      (category3 || "").trim(),
+      (category4 || "").trim(),
+      (rsp || "").trim(),
       (item_remarks || "").trim(),
       istNow,
       product_under_90 || "No",
@@ -1264,8 +1274,8 @@ const createJob = async (req, res) => {
       istNow,
     ];
 
-    if (values.length !== 35) {
-      console.error(`VALUE COUNT MISMATCH: expected 35, got ${values.length}`);
+    if (values.length !== 39) {
+      console.error(`VALUE COUNT MISMATCH: expected 39, got ${values.length}`);
       return res
         .status(500)
         .json({ success: false, message: "Internal column count error" });
@@ -1275,7 +1285,7 @@ const createJob = async (req, res) => {
 
     await db.query(
       `DELETE FROM repair_app.otp_store WHERE phone = $1 AND job_id = $2`,
-      [customer_number.trim(), jobId]
+      [customer_number.trim(), jobId],
     );
 
     return res.json({

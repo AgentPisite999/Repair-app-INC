@@ -20,7 +20,11 @@ function isISODate(v) {
 }
 
 function isAdminRole(role) {
-  return String(role || "").toLowerCase().trim() === "admin";
+  return (
+    String(role || "")
+      .toLowerCase()
+      .trim() === "admin"
+  );
 }
 
 function norm(v) {
@@ -33,26 +37,26 @@ const renderAnalytics = async (req, res) => {
       `SELECT DISTINCT "Status"
        FROM repair_app.job_data
        WHERE "Status" IS NOT NULL AND "Status" != ''
-       ORDER BY "Status"`
+       ORDER BY "Status"`,
     );
     const statuses = statusResult.rows.map((r) => r.Status);
 
     const whResult = await db.query(
       `SELECT wh_id AS "WhID", warehouse_name AS "WarehouseName"
        FROM repair_app."Warehouse_Master"
-       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`
+       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
     );
 
     const courierResult = await db.query(
       `SELECT courier_id AS "CourierID", courier_name AS "CourierName"
        FROM repair_app."Courier_Master"
-       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`
+       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
     );
 
     const vendorResult = await db.query(
       `SELECT vendor_id AS "VendorID", vendor_name AS "VendorName"
        FROM repair_app."Vendor_Master"
-       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`
+       WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
     );
 
     res.render("action-analytics", {
@@ -112,7 +116,7 @@ const getJobs = async (req, res) => {
     if (search && search.trim()) {
       const s = `%${search.trim()}%`;
       where.push(
-        `("Job_Id" ILIKE $${paramIndex} OR "CustomerName" ILIKE $${paramIndex + 1} OR "CustomerNumber" ILIKE $${paramIndex + 2} OR "ITEM_ID" ILIKE $${paramIndex + 3} OR "Store_Id" ILIKE $${paramIndex + 4} OR "AWB" ILIKE $${paramIndex + 5} OR "WarehouseID" ILIKE $${paramIndex + 6})`
+        `("Job_Id" ILIKE $${paramIndex} OR "CustomerName" ILIKE $${paramIndex + 1} OR "CustomerNumber" ILIKE $${paramIndex + 2} OR "ITEM_ID" ILIKE $${paramIndex + 3} OR "Store_Id" ILIKE $${paramIndex + 4} OR "AWB" ILIKE $${paramIndex + 5} OR "WarehouseID" ILIKE $${paramIndex + 6})`,
       );
       params.push(s, s, s, s, s, s, s);
       paramIndex += 7;
@@ -125,7 +129,7 @@ const getJobs = async (req, res) => {
        FROM repair_app.job_data
        ${whereClause}
        GROUP BY "Status"`,
-      params
+      params,
     );
 
     let total = 0;
@@ -153,11 +157,14 @@ const getJobs = async (req, res) => {
               "Vendor_Sent_Date", "Vendor_Decision", "Vendor_Decision_Date",
               "Store_Sent_Date", "Store_Received_Date",
               "Closing_Ticket_Remarks",
-              "admin_logs"
+              "Merchandise_Decision", "Merchandise_Action",
+              "admin_logs",
+              "BARCODE", "DamageReason",
+              "Return_Store_AWB", "Return_Store_Remarks"
        FROM repair_app.job_data
        ${whereClause}
        ORDER BY id DESC`,
-      params
+      params,
     );
 
     return res.json({
@@ -219,6 +226,10 @@ const adminUpdateJob = async (req, res) => {
     "Vendor_Decision_Date",
     "Store_Sent_Date",
     "Store_Received_Date",
+    "Merchandise_Decision",
+    "Merchandise_Action",
+    "Return_Store_AWB",
+    "Return_Store_Remarks",
   ]);
 
   const keys = Object.keys(updates).filter((k) => allowed.has(k));
@@ -229,7 +240,7 @@ const adminUpdateJob = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT * FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     const row = result.rows[0];
     if (!row) return res.json({ success: false, message: "Job not found" });
@@ -283,7 +294,7 @@ const adminUpdateJob = async (req, res) => {
       `UPDATE repair_app.job_data
        SET ${setClauses.join(", ")}
        WHERE "Job_Id" = $${paramIndex}`,
-      values
+      values,
     );
 
     if (updateResult.rowCount === 0) {
@@ -303,7 +314,7 @@ const getStatuses = async (req, res) => {
       `SELECT DISTINCT "Status"
        FROM repair_app.job_data
        WHERE "Status" IS NOT NULL AND "Status" != ''
-       ORDER BY "Status"`
+       ORDER BY "Status"`,
     );
     res.json({ success: true, statuses: result.rows.map((r) => r.Status) });
   } catch (err) {
@@ -321,7 +332,7 @@ const getAttachment = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT "Attachment" FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     const row = result.rows[0];
 
@@ -365,7 +376,7 @@ const getWhAttachment = async (req, res) => {
       `SELECT "WarehouseAttachment"
        FROM repair_app.job_data
        WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     const row = result.rows[0];
 
@@ -413,7 +424,7 @@ const updateDeliveryDate = async (req, res) => {
       `UPDATE repair_app.job_data
        SET "DeliveryDate" = $1
        WHERE "Job_Id" = $2`,
-      [deliveryDate, jobId]
+      [deliveryDate, jobId],
     );
 
     if (result.rowCount === 0) {
@@ -428,7 +439,13 @@ const updateDeliveryDate = async (req, res) => {
 };
 
 const closeTicket = async (req, res) => {
-  const { jobId, verified_otp, closing_remarks } = req.body;
+  const {
+    jobId,
+    verified_otp,
+    closing_remarks,
+    merchandise_decision,
+    merchandise_action,
+  } = req.body;
 
   if (!jobId) return res.json({ success: false, message: "Missing Job ID" });
   if (!verified_otp) {
@@ -440,13 +457,25 @@ const closeTicket = async (req, res) => {
       message: "Closing remarks are required",
     });
   }
+  if (!merchandise_decision || !merchandise_decision.trim()) {
+    return res.json({
+      success: false,
+      message: "Merchandise Decision is required",
+    });
+  }
+  if (!merchandise_action || !merchandise_action.trim()) {
+    return res.json({
+      success: false,
+      message: "Merchandise Action is required",
+    });
+  }
 
   try {
     const jobResult = await db.query(
       `SELECT "Status", "CustomerNumber"
        FROM repair_app.job_data
        WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     const row = jobResult.rows[0];
 
@@ -471,7 +500,7 @@ const closeTicket = async (req, res) => {
        WHERE phone = $1 AND job_id = $2 AND expires_at > $3
        ORDER BY created_at DESC
        LIMIT 1`,
-      [phone, jobId, istNow]
+      [phone, jobId, istNow],
     );
     const otpRow = otpResult.rows[0];
 
@@ -490,9 +519,17 @@ const closeTicket = async (req, res) => {
       `UPDATE repair_app.job_data
        SET "Status" = 'Closed',
            "Ticket_Closing_Date" = $1,
-           "Closing_Ticket_Remarks" = $2
-       WHERE "Job_Id" = $3`,
-      [istNow, closing_remarks.trim(), jobId]
+           "Closing_Ticket_Remarks" = $2,
+           "Merchandise_Decision" = $3,
+           "Merchandise_Action" = $4
+       WHERE "Job_Id" = $5`,
+      [
+        istNow,
+        closing_remarks.trim(),
+        merchandise_decision.trim(),
+        merchandise_action.trim(),
+        jobId,
+      ],
     );
 
     if (updateResult.rowCount === 0) {
@@ -501,7 +538,7 @@ const closeTicket = async (req, res) => {
 
     await db.query(
       `DELETE FROM repair_app.otp_store WHERE phone = $1 AND job_id = $2`,
-      [phone, jobId]
+      [phone, jobId],
     );
 
     return res.json({ success: true });
@@ -532,7 +569,7 @@ const saveWarehouseDraft = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     const row = result.rows[0];
 
@@ -585,7 +622,7 @@ const saveWarehouseDraft = async (req, res) => {
       `UPDATE repair_app.job_data
        SET ${setClauses.join(", ")}
        WHERE "Job_Id" = $${paramIndex}`,
-      vals
+      vals,
     );
 
     if (updateResult.rowCount === 0) {
@@ -620,7 +657,7 @@ const transferToWarehouse = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     const row = result.rows[0];
     if (!row) return res.json({ success: false, message: "Job not found" });
@@ -672,7 +709,7 @@ const transferToWarehouse = async (req, res) => {
       `UPDATE repair_app.job_data
        SET ${setClauses.join(", ")}
        WHERE "Job_Id" = $${paramIndex}`,
-      vals
+      vals,
     );
 
     if (updateResult.rowCount === 0) {
@@ -693,7 +730,7 @@ const warehouseAcknowledge = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
 
     if (!result.rows[0]) {
@@ -707,7 +744,7 @@ const warehouseAcknowledge = async (req, res) => {
        SET "Status" = 'Warehouse Received',
            "Warehouse_Receive_Date" = $1
        WHERE "Job_Id" = $2`,
-      [istNow, jobId]
+      [istNow, jobId],
     );
 
     if (updateResult.rowCount === 0) {
@@ -737,7 +774,7 @@ const saveVendorDraft = async (req, res) => {
       `SELECT "Status", "Warehouse_Receive_Date", "DeliveryDate"
        FROM repair_app.job_data
        WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     const row = result.rows[0];
 
@@ -785,7 +822,7 @@ const saveVendorDraft = async (req, res) => {
         draftDate || "",
         (vendor_awb || "").trim(),
         jobId,
-      ]
+      ],
     );
 
     if (updateResult.rowCount === 0) {
@@ -825,7 +862,7 @@ const sendToVendor = async (req, res) => {
       `SELECT "Status", "Warehouse_Receive_Date", "DeliveryDate"
        FROM repair_app.job_data
        WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     const row = result.rows[0];
 
@@ -878,7 +915,7 @@ const sendToVendor = async (req, res) => {
         sentDate,
         (vendor_awb || "").trim(),
         jobId,
-      ]
+      ],
     );
 
     if (updateResult.rowCount === 0) {
@@ -922,7 +959,7 @@ const vendorDecision = async (req, res) => {
       `SELECT "Status", "Vendor_Sent_Date", "DeliveryDate"
        FROM repair_app.job_data
        WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
     const row = result.rows[0];
 
@@ -967,7 +1004,7 @@ const vendorDecision = async (req, res) => {
            "Vendor_Decision" = $2,
            "Vendor_Decision_Date" = $3
        WHERE "Job_Id" = $4`,
-      [newStatus, vendor_decision, decisionDate, jobId]
+      [newStatus, vendor_decision, decisionDate, jobId],
     );
 
     if (updateResult.rowCount === 0) {
@@ -982,13 +1019,16 @@ const vendorDecision = async (req, res) => {
 };
 
 const returnToStore = async (req, res) => {
-  const { jobId } = req.body;
+  const { jobId, return_awb, return_remarks } = req.body;
   if (!jobId) return res.json({ success: false, message: "Job ID required" });
+  if (!return_awb || !String(return_awb).trim()) {
+    return res.json({ success: false, message: "AWB Number is required" });
+  }
 
   try {
     const result = await db.query(
       `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
 
     if (!result.rows[0]) {
@@ -1000,9 +1040,11 @@ const returnToStore = async (req, res) => {
     const updateResult = await db.query(
       `UPDATE repair_app.job_data
        SET "Status" = 'Sent to Store',
-           "Store_Sent_Date" = $1
-       WHERE "Job_Id" = $2`,
-      [istNow, jobId]
+           "Store_Sent_Date" = $1,
+           "Return_Store_AWB" = $2,
+           "Return_Store_Remarks" = $3
+       WHERE "Job_Id" = $4`,
+      [istNow, String(return_awb).trim(), (return_remarks || "").trim(), jobId],
     );
 
     if (updateResult.rowCount === 0) {
@@ -1023,7 +1065,7 @@ const storeAcknowledge = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT "Status" FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId]
+      [jobId],
     );
 
     if (!result.rows[0]) {
@@ -1037,7 +1079,7 @@ const storeAcknowledge = async (req, res) => {
        SET "Status" = 'Store Received',
            "Store_Received_Date" = $1
        WHERE "Job_Id" = $2`,
-      [istNow, jobId]
+      [istNow, jobId],
     );
 
     if (updateResult.rowCount === 0) {
@@ -1048,6 +1090,241 @@ const storeAcknowledge = async (req, res) => {
   } catch (err) {
     console.error("storeAcknowledge error:", err);
     return res.json({ success: false, message: err.message });
+  }
+};
+
+const generateReceipt = async (req, res) => {
+  const { jobId } = req.params;
+  if (!jobId) {
+    return res.status(400).json({ success: false, message: "Job ID required" });
+  }
+
+  try {
+    const jobResult = await db.query(
+      `SELECT "Job_Id", "BARCODE", "ITEM_ID", "DamageReason", "WarehouseID",
+              "WarehouseName", "CourierName", "AWB", "DispatchDate",
+              "WarehouseRemarks", "Store_Id", "CustomerName", "CustomerNumber",
+              "Warehouse_Sent_Date", "CreatedAt", "ProductUnder90Days",
+              "Vendor_Name", "Vendor_Awb", "Gate_Pass_No", "Vendor_Sent_Date",
+              "Vendor_Decision", "Return_Store_AWB", "Return_Store_Remarks",
+              "Store_Sent_Date", "Store_Received_Date",
+              "Merchandise_Decision", "Merchandise_Action",
+              "Ticket_Closing_Date", "Closing_Ticket_Remarks", "Status"
+       FROM repair_app.job_data
+       WHERE "Job_Id" = $1`,
+      [jobId],
+    );
+    const job = jobResult.rows[0];
+    if (!job) {
+      return res.status(404).json({ success: false, message: "Job not found" });
+    }
+
+    // Fetch warehouse address
+    let warehouseAddress = "";
+    if (job.WarehouseID || job.WarehouseName) {
+      const whResult = await db.query(
+        `SELECT address, city, state FROM repair_app."Warehouse_Master"
+         WHERE wh_id = $1 OR warehouse_name = $2 LIMIT 1`,
+        [job.WarehouseID || "", job.WarehouseName || ""],
+      );
+      if (whResult.rows[0]) {
+        const w = whResult.rows[0];
+        warehouseAddress = [w.address, w.city, w.state].filter(Boolean).join(", ");
+      }
+    }
+
+    // Fetch store address
+    let storeAddress = "";
+    let storeName = "";
+    if (job.Store_Id) {
+      const storeResult = await db.query(
+        `SELECT address, city, state, store_name FROM repair_app."Store_Master"
+         WHERE store_id = $1 OR store_name = $1 LIMIT 1`,
+        [job.Store_Id],
+      );
+      if (storeResult.rows[0]) {
+        const s = storeResult.rows[0];
+        storeName = s.store_name || "";
+        storeAddress = [s.address, s.city, s.state].filter(Boolean).join(", ");
+      }
+    }
+
+    const PDFDocument = require("pdfkit");
+
+    // A4: 595.28 x 841.89 points
+    const PAGE_W = 595.28;
+    const PAGE_H = 841.89;
+    const ML = 40;
+    const MR = 40;
+    const CW = PAGE_W - ML - MR;
+
+    const RED   = "#c0392b";
+    const NAVY  = "#18130e";
+    const GREY  = "#5a4f45";
+    const LGREY = "#9a8f85";
+    const BDR   = "#dfd6cc";
+
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      autoFirstPage: true,
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="Receipt-${jobId}.pdf"`);
+    doc.pipe(res);
+
+    // ── HEADER (0–62) ──
+    doc.rect(0, 0, PAGE_W, 62).fill(NAVY);
+    doc.rect(0, 59, PAGE_W, 3).fill(RED);
+
+    doc.fontSize(20).font("Helvetica-Bold").fillColor("#ffffff");
+    doc.text("INC.5", ML, 14);
+    doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.4)");
+    doc.text("FOOTWEAR REPAIR PORTAL", ML, 38);
+
+    doc.fontSize(13).font("Helvetica-Bold").fillColor(RED);
+    doc.text("WAREHOUSE TRANSFER RECEIPT", ML, 14, { align: "right", width: CW });
+    doc.fontSize(8).font("Helvetica").fillColor("rgba(255,255,255,0.4)");
+    const genDate = new Date().toLocaleDateString("en-IN", { day:"2-digit", month:"numeric", year:"numeric" });
+    doc.text(`Generated: ${genDate}`, ML, 36, { align: "right", width: CW });
+
+    // ── RECEIPT NO + DATE (62–90) ──
+    let y = 70;
+    doc.fontSize(11).font("Helvetica-Bold").fillColor(NAVY);
+    doc.text(`Receipt No: ${job.Job_Id}`, ML, y);
+    doc.fontSize(8).font("Helvetica").fillColor(LGREY);
+    const dispDate = job.Warehouse_Sent_Date || job.DispatchDate || "";
+    doc.text(`Date: ${dispDate}`, ML, y + 14);
+    y += 34;
+
+    doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
+    y += 10;
+
+    // ── FROM / TO (y–y+55) ──
+    doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
+    doc.text("FROM (STORE)", ML, y);
+    doc.text("TO (WAREHOUSE)", ML + CW / 2 + 10, y);
+    y += 13;
+
+    doc.fontSize(10).font("Helvetica-Bold").fillColor(NAVY);
+    doc.text(job.Store_Id || "—", ML, y, { width: CW / 2 - 5 });
+    doc.text(
+      job.WarehouseID ? `${job.WarehouseID}${job.WarehouseName ? " - " + job.WarehouseName : ""}` : "—",
+      ML + CW / 2 + 10, y, { width: CW / 2 - 10 }
+    );
+    y += 14;
+
+    doc.fontSize(8).font("Helvetica").fillColor(GREY);
+    const storeText = [storeName, storeAddress].filter(Boolean).join("\n") || "—";
+    const whText = warehouseAddress || "—";
+    doc.text(storeText, ML, y, { width: CW / 2 - 5 });
+    doc.text(whText, ML + CW / 2 + 10, y, { width: CW / 2 - 10 });
+    y += 28;
+
+    doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
+    y += 10;
+
+    // helper: draw a key-value row, returns new y
+    const row = (label, value, yy) => {
+      doc.fontSize(8).font("Helvetica-Bold").fillColor(LGREY);
+      doc.text(label, ML, yy, { width: 130 });
+      doc.fontSize(9).font("Helvetica").fillColor(NAVY);
+      // Strip " - Typed" suffix for display, add tag after
+      const raw = (value || "").toString().trim();
+      const typedMatch = raw.match(/^(.+?)\s*-\s*Typed\s*$/i);
+      if (typedMatch) {
+        doc.text(typedMatch[1].trim(), ML + 135, yy, { width: CW - 135, continued: false });
+        // small amber "Typed" label
+        doc.fontSize(6).font("Helvetica-Bold").fillColor("#b45309");
+        doc.text(" [Typed]", ML + 135 + doc.widthOfString(typedMatch[1].trim()), yy);
+      } else {
+        doc.text(raw || "—", ML + 135, yy, { width: CW - 135 });
+      }
+      return yy + 16;
+    };
+
+    // ── ITEM DETAILS ──
+    doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
+    doc.text("ITEM DETAILS", ML, y);
+    y += 13;
+
+    y = row("Job ID",        job.Job_Id,            y);
+    y = row("Barcode",       job.BARCODE,           y);
+    y = row("Item ID",       job.ITEM_ID,           y);
+    y = row("Warranty",      job.ProductUnder90Days, y);
+    if (job.DamageReason) y = row("Damage Reason", job.DamageReason, y);
+
+    y += 4;
+    doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
+    y += 10;
+
+    // ── DISPATCH DETAILS ──
+    doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
+    doc.text("DISPATCH DETAILS", ML, y);
+    y += 13;
+
+    y = row("Warehouse ID",   job.WarehouseID,       y);
+    y = row("Warehouse Name", job.WarehouseName,     y);
+    y = row("Courier",        job.CourierName,       y);
+    y = row("AWB No.",        job.AWB,               y);
+    y = row("Dispatch Date",  job.DispatchDate,      y);
+    y = row("Store ID",       job.Store_Id,          y);
+    if (job.WarehouseRemarks) y = row("Remarks", job.WarehouseRemarks, y);
+
+    // ── VENDOR DETAILS (if any) ──
+    if (job.Vendor_Name) {
+      y += 4;
+      doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
+      y += 10;
+      doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
+      doc.text("VENDOR DETAILS", ML, y);
+      y += 13;
+      y = row("Vendor",       job.Vendor_Name,     y);
+      y = row("Gate Pass No", job.Gate_Pass_No,    y);
+      y = row("AWB No.",      job.Vendor_Awb,      y);
+      y = row("Sent Date",    job.Vendor_Sent_Date, y);
+      y = row("Decision",     job.Vendor_Decision,  y);
+    }
+
+    // ── RETURN TO STORE (if any) ──
+    if (job.Return_Store_AWB || job.Store_Sent_Date) {
+      y += 4;
+      doc.moveTo(ML, y).lineTo(ML + CW, y).strokeColor(BDR).lineWidth(0.5).stroke();
+      y += 10;
+      doc.fontSize(7).font("Helvetica-Bold").fillColor(RED);
+      doc.text("RETURN TO STORE", ML, y);
+      y += 13;
+      y = row("Return AWB",    job.Return_Store_AWB,      y);
+      y = row("Sent Date",     job.Store_Sent_Date,       y);
+      y = row("Received Date", job.Store_Received_Date,   y);
+      if (job.Return_Store_Remarks) y = row("Remarks", job.Return_Store_Remarks, y);
+    }
+
+    // ── SIGNATURES — fixed at y=740 so footer always at bottom ──
+    const sigY = 740;
+    const sigW = 160;
+    doc.moveTo(ML, sigY).lineTo(ML + sigW, sigY).strokeColor(NAVY).lineWidth(0.5).stroke();
+    doc.moveTo(ML + CW - sigW, sigY).lineTo(ML + CW, sigY).strokeColor(NAVY).lineWidth(0.5).stroke();
+    doc.fontSize(7).font("Helvetica").fillColor(LGREY);
+    doc.text("Store Signature / Stamp", ML, sigY + 5);
+    doc.text("Warehouse Signature / Stamp", ML + CW - sigW, sigY + 5, { width: sigW });
+
+    // ── FOOTER — fixed at bottom of A4 (800–841) ──
+    doc.rect(0, 800, PAGE_W, 41.89).fill(NAVY);
+    doc.fontSize(7).font("Helvetica").fillColor("rgba(255,255,255,0.45)");
+    doc.text(
+      "This is a system-generated receipt from Inc.5 Footwear Repair Portal. No signature required for digital copy.",
+      ML, 815, { width: CW, align: "center" }
+    );
+
+    doc.end();
+
+  } catch (err) {
+    console.error("generateReceipt error:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: "Failed to generate receipt" });
+    }
   }
 };
 
@@ -1068,4 +1345,5 @@ module.exports = {
   returnToStore,
   storeAcknowledge,
   adminUpdateJob,
+  generateReceipt,
 };

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt — <%= job.Job_Id %></title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap");
+    *{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --red:#c0392b;--navy:#18130e;--bdr:#ddd5cb;
+      --dark:#18130e;--mid:#5a4f45;--light:#9a8f85;
+      --green:#16a34a;--amber:#b45309;
+    }
+
+    body{
+      font-family:"Jost",sans-serif;
+      background:#ccc8c2;
+      display:flex;flex-direction:column;align-items:center;
+      padding:16px 0 32px;
+    }
+
+    .toolbar{width:794px;max-width:98vw;display:flex;justify-content:flex-end;margin-bottom:10px;}
+    .btn-print{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:7px 16px;background:var(--navy);color:#fff;
+      border:none;border-radius:3px;font-family:"Jost",sans-serif;
+      font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
+    }
+
+    /* ══════════════════════════════════════════
+       PAGE: 794px wide, 1123px tall
+       position:relative so children can be
+       positioned absolutely inside it
+    ══════════════════════════════════════════ */
+    .page{
+      width:794px;
+      height:1123px;
+      max-width:98vw;
+      background:#fff;
+      box-shadow:0 4px 24px rgba(0,0,0,.22);
+      position:relative;
+      overflow:hidden;
+    }
+
+    /* ── HEADER: top 0, fixed height 52px ── */
+    .hdr{
+      position:absolute;top:0;left:0;right:0;height:52px;
+      background:var(--navy);
+      display:flex;align-items:center;justify-content:space-between;
+      padding:0 22px;
+      border-bottom:3px solid var(--red);
+    }
+    .brand{font-size:20px;font-weight:700;color:#fff;letter-spacing:.05em;}
+    .brand-sub{font-size:7px;color:rgba(255,255,255,.3);letter-spacing:.28em;text-transform:uppercase;margin-top:2px;}
+    .hdr-right{text-align:right;}
+    .hdr-title{font-size:13px;font-weight:700;color:var(--red);letter-spacing:.14em;text-transform:uppercase;}
+    .hdr-date{font-size:8px;color:rgba(255,255,255,.3);letter-spacing:.1em;margin-top:2px;}
+
+    /* ── FOOTER: bottom 0, fixed height 30px ── */
+    .ftr{
+      position:absolute;bottom:0;left:0;right:0;height:30px;
+      background:var(--navy);
+      display:flex;align-items:center;justify-content:center;
+    }
+    .ftr p{font-size:7.5px;color:rgba(255,255,255,.55);letter-spacing:.04em;text-align:center;}
+
+    /* ── BODY: between header (52px) and footer (30px) ── */
+    .body{
+      position:absolute;
+      top:52px;
+      bottom:30px;
+      left:0;right:0;
+      overflow:hidden;
+      display:flex;flex-direction:column;
+    }
+
+    /* meta strip */
+    .meta{padding:6px 22px 5px;border-bottom:1px solid var(--bdr);flex-shrink:0;}
+    .meta-no{font-size:11px;font-weight:700;color:var(--dark);}
+    .meta-date{font-size:9px;color:var(--light);margin-top:1px;}
+
+    /* from/to */
+    .from-to{
+      display:grid;grid-template-columns:1fr 1fr;gap:16px;
+      padding:7px 22px;border-bottom:1px solid var(--bdr);flex-shrink:0;
+    }
+    .addr-lbl{font-size:7px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--red);margin-bottom:3px;}
+    .addr-name{font-size:11px;font-weight:600;color:var(--dark);margin-bottom:1px;}
+    .addr-line{font-size:9px;color:var(--mid);line-height:1.4;}
+
+    /* scrollable content */
+    .content{
+      flex:1;min-height:0;
+      padding:7px 22px 0;
+      display:flex;flex-direction:column;
+      overflow:hidden;
+    }
+    .sec{
+      font-size:7px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;
+      color:var(--red);border-bottom:1px solid var(--bdr);
+      padding-bottom:3px;margin-bottom:4px;margin-top:7px;flex-shrink:0;
+    }
+    .sec:first-child{margin-top:0;}
+
+    table.kv{width:100%;border-collapse:collapse;flex-shrink:0;}
+    table.kv td{padding:1.5px 0;font-size:10px;vertical-align:top;line-height:1.4;}
+    table.kv .k{color:var(--light);width:128px;padding-right:8px;font-weight:400;}
+    table.kv .v{color:var(--dark);font-weight:500;}
+    table.kv .vb{color:var(--dark);font-weight:700;}
+    table.kv .vd{color:var(--light);}
+
+    .typed-tag{
+      display:inline-block;margin-left:3px;
+      font-size:6.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+      color:var(--amber);background:#fffbeb;border:1px solid #fde68a;
+      border-radius:2px;padding:0 3px;vertical-align:middle;
+    }
+    .wb{display:inline-flex;align-items:center;padding:1px 6px;border-radius:100px;font-size:8px;font-weight:700;}
+    .wb-yes{background:#f0fdf4;color:var(--green);border:1px solid #bbf7d0;}
+    .wb-no{background:#fff5f5;color:var(--red);border:1px solid rgba(192,57,43,.25);}
+
+    .push{flex:1;}
+
+    .sigs{display:flex;justify-content:space-between;padding:10px 4px 8px;flex-shrink:0;}
+    .sig{display:flex;flex-direction:column;align-items:center;gap:3px;}
+    .sig-line{width:130px;border-bottom:1px solid #444;}
+    .sig-lbl{font-size:7.5px;color:var(--light);letter-spacing:.1em;text-transform:uppercase;}
+
+    /* ══ PRINT ══
+       Use exactly the same pixel dimensions.
+       position:absolute children stay clipped inside .page.
+       overflow:hidden on .page kills everything outside.
+    ══════════════ */
+    @media print{
+      @page{size:794px 1123px;margin:0;}
+
+      html,body{
+        width:794px!important;height:1123px!important;
+        margin:0!important;padding:0!important;
+        background:#fff!important;display:block!important;
+        -webkit-print-color-adjust:exact!important;
+        print-color-adjust:exact!important;
+      }
+
+      .toolbar{display:none!important;}
+
+      .page{
+        width:794px!important;height:1123px!important;
+        box-shadow:none!important;margin:0!important;
+        overflow:hidden!important;
+        page-break-after:avoid!important;
+        break-after:avoid!important;
+      }
+
+      /* block ALL page breaks everywhere */
+      *{
+        page-break-before:avoid!important;
+        page-break-after:avoid!important;
+        page-break-inside:avoid!important;
+        break-before:avoid!important;
+        break-after:avoid!important;
+        break-inside:avoid!important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<%
+  function v(x){return(x||"").toString().trim();}
+  function d(x){return v(x)||"—";}
+  function awb(raw){
+    const s=v(raw);if(!s)return'<span class="vd">—</span>';
+    const m=s.match(/^(.+?)\s*-\s*Typed\s*$/i);
+    return m?`<span class="vb">${m[1].trim()} <span class="typed-tag">Typed</span></span>`:`<span class="vb">${s}</span>`;
+  }
+  function vc(x,bold){
+    const s=v(x);if(!s)return'<span class="vd">—</span>';
+    return`<span class="${bold?'vb':'v'}">${s}</span>`;
+  }
+  const now=new Date();
+  const pd=now.toLocaleDateString("en-IN",{day:"2-digit",month:"numeric",year:"numeric"})+" "+now.toTimeString().slice(0,8);
+  const u90=v(job.ProductUnder90Days).toLowerCase();
+  const wbadge=(u90==="yes"||u90==="true")?'<span class="wb wb-yes">✓ Under Warranty</span>'
+              :(u90==="no"||u90==="false")?'<span class="wb wb-no">✕ Out of Warranty</span>'
+              :`<span class="v">${d(job.ProductUnder90Days)}</span>`;
+  const hasVendor=!!v(job.Vendor_Name);
+  const hasReturn=!!(v(job.Return_Store_AWB)||v(job.Store_Sent_Date));
+  const isClosed=v(job.Status).toLowerCase()==="closed";
+%>
+
+<div class="toolbar">
+  <button class="btn-print" onclick="window.print()">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+    </svg>
+    Print
+  </button>
+</div>
+
+<div class="page">
+
+  <!-- HEADER: absolute top -->
+  <div class="hdr">
+    <div>
+      <div class="brand">INC.5</div>
+      <div class="brand-sub">Footwear Repair Portal</div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-title">Warehouse Transfer Receipt</div>
+      <div class="hdr-date">Generated: <%= pd %></div>
+    </div>
+  </div>
+
+  <!-- FOOTER: absolute bottom -->
+  <div class="ftr">
+    <p>This is a system-generated receipt from Inc.5 Footwear Repair Portal. No signature required for digital copy.</p>
+  </div>
+
+  <!-- BODY: between header and footer -->
+  <div class="body">
+
+    <div class="meta">
+      <div class="meta-no">Receipt No: <%= d(job.Job_Id) %></div>
+      <div class="meta-date">Date: <%= pd %></div>
+    </div>
+
+    <div class="from-to">
+      <div>
+        <div class="addr-lbl">From (Store)</div>
+        <div class="addr-name"><%= d(job.Store_Id) %></div>
+        <div class="addr-line"><%= v(job.StoreAddress)||v(job.Store_Id) %></div>
+      </div>
+      <div>
+        <div class="addr-lbl">To (Warehouse)</div>
+        <div class="addr-name"><%= v(job.WarehouseID)?(job.WarehouseID+(job.WarehouseName?' - '+job.WarehouseName:'')):'—' %></div>
+        <div class="addr-line"><%= v(job.WarehouseAddress)||v(job.WarehouseName)||'' %></div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="sec">Item Details</div>
+      <table class="kv">
+        <tr><td class="k">Job ID</td>   <td><%- vc(job.Job_Id,true) %></td></tr>
+        <tr><td class="k">Barcode</td>  <td><%- vc(job.CustomerNumber,true) %></td></tr>
+        <tr><td class="k">Item ID</td>  <td><%- vc(job.ITEM_ID,true) %></td></tr>
+        <tr><td class="k">Warranty</td> <td><%- wbadge %></td></tr>
+        <%if(v(job.DamageReason)){%><tr><td class="k">Damage Reason</td><td><%- vc(job.DamageReason) %></td></tr><%}%>
+      </table>
+
+      <div class="sec">Dispatch Details</div>
+      <table class="kv">
+        <tr><td class="k">Warehouse ID</td>  <td><%- vc(job.WarehouseID) %></td></tr>
+        <tr><td class="k">Warehouse Name</td><td><%- vc(job.WarehouseName) %></td></tr>
+        <tr><td class="k">Courier</td>       <td><%- vc(job.CourierName) %></td></tr>
+        <tr><td class="k">AWB No.</td>       <td><%- awb(job.AWB) %></td></tr>
+        <tr><td class="k">Dispatch Date</td> <td><%- vc(job.DispatchDate) %></td></tr>
+        <tr><td class="k">Store ID</td>      <td><%- vc(job.Store_Id) %></td></tr>
+        <tr><td class="k">Remarks</td>       <td><%- vc(job.WarehouseRemarks) %></td></tr>
+      </table>
+
+      <%if(hasVendor){%>
+      <div class="sec">Vendor Details</div>
+      <table class="kv">
+        <tr><td class="k">Vendor</td>        <td><%- vc(job.Vendor_Name) %></td></tr>
+        <tr><td class="k">Gate Pass No.</td> <td><%- vc(job.Gate_Pass_No,true) %></td></tr>
+        <tr><td class="k">AWB No.</td>       <td><%- awb(job.Vendor_Awb) %></td></tr>
+        <tr><td class="k">Sent Date</td>     <td><%- vc(job.Vendor_Sent_Date) %></td></tr>
+        <tr><td class="k">Decision</td>      <td><%- vc(job.Vendor_Decision) %></td></tr>
+      </table>
+      <%}%>
+
+      <%if(hasReturn){%>
+      <div class="sec">Return to Store</div>
+      <table class="kv">
+        <tr><td class="k">Return AWB</td>    <td><%- awb(job.Return_Store_AWB) %></td></tr>
+        <tr><td class="k">Sent Date</td>     <td><%- vc(job.Store_Sent_Date) %></td></tr>
+        <tr><td class="k">Received Date</td> <td><%- vc(job.Store_Received_Date) %></td></tr>
+        <%if(v(job.Return_Store_Remarks)){%><tr><td class="k">Remarks</td><td><%- vc(job.Return_Store_Remarks) %></td></tr><%}%>
+      </table>
+      <%}%>
+
+      <%if(isClosed){%>
+      <div class="sec">Closure Details</div>
+      <table class="kv">
+        <tr><td class="k">Closed On</td>      <td><%- vc(job.Ticket_Closing_Date) %></td></tr>
+        <tr><td class="k">Merch Decision</td> <td><%- vc(job.Merchandise_Decision) %></td></tr>
+        <tr><td class="k">Action</td>         <td><%- vc(job.Merchandise_Action) %></td></tr>
+        <%if(v(job.Closing_Ticket_Remarks)){%><tr><td class="k">Remarks</td><td><%- vc(job.Closing_Ticket_Remarks) %></td></tr><%}%>
+      </table>
+      <%}%>
+
+      <div class="push"></div>
+
+      <div class="sigs">
+        <div class="sig"><div class="sig-line"></div><div class="sig-lbl">Store Signature / Stamp</div></div>
+        <div class="sig"><div class="sig-line"></div><div class="sig-lbl">Warehouse Signature / Stamp</div></div>
+      </div>
+
+    </div><!-- /content -->
+
+  </div><!-- /body -->
+
+</div><!-- /page -->
+
+<script>
+  if(new URLSearchParams(window.location.search).get("print")==="1"){
+    window.addEventListener("load",()=>window.print());
+  }
+</script>
+</body>
+</html>
