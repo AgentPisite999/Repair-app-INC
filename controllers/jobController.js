@@ -874,7 +874,7 @@ const getItemByBarcode = async (req, res) => {
       `SELECT barcode, item_code, division, section, department,
               category2, category3, category4, rsp, remarks
        FROM repair_app."Item_Master"
-       WHERE barcode = $1 OR item_code = $1`,
+       WHERE barcode = $1 OR item_code = $1 OR LOWER(category2) = LOWER($1)`,
       [searchVal],
     );
 
