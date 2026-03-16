@@ -911,7 +911,6 @@
 // });
 
 
-
 document.addEventListener("DOMContentLoaded", () => {
   const pageLoader = document.getElementById("pageLoader");
   setTimeout(() => pageLoader.classList.add("hidden"), 400);
@@ -1425,42 +1424,38 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ── Debounced live search while typing ──
+  // ── Search triggers: Enter key OR 1.2s pause after typing stops ──
+  // NO blur trigger — avoids re-render when user clicks the picker dropdown
+
   barcodeInput.addEventListener("input", () => {
     clearTimeout(barcodeDebounceTimer);
     const val = barcodeInput.value.trim();
 
+    // Clear previous results as soon as user edits
     clearItemFields();
     clearMsgs();
+    itemSearchLoader.classList.add("hidden");
 
-    if (!val) {
-      itemSearchLoader.classList.add("hidden");
-      return;
-    }
+    if (!val) return;
 
-    // Show loader immediately so user knows something is happening
-    itemSearchLoader.classList.remove("hidden");
-
-    // Fire after 500ms pause — fast enough, not too eager
+    // 1200ms debounce so user can finish typing their full term before search fires
     barcodeDebounceTimer = setTimeout(() => {
+      itemSearchLoader.classList.remove("hidden");
       fetchItemDetails();
-    }, 500);
+    }, 1200);
   });
 
-  // Blur — fire immediately (user moved away)
-  barcodeInput.addEventListener("blur", () => {
-    clearTimeout(barcodeDebounceTimer);
-    if (barcodeInput.value.trim()) fetchItemDetails();
-  });
-
-  // Enter — fire immediately
+  // Enter — instant search, most reliable trigger
   barcodeInput.addEventListener("keypress", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
       clearTimeout(barcodeDebounceTimer);
+      itemSearchLoader.classList.remove("hidden");
       fetchItemDetails();
     }
   });
+
+  // NO blur listener — blur caused picker to collapse when user clicked a dropdown option
 
   // ────────────────────────────────────────────────
   // DAMAGE REASON
