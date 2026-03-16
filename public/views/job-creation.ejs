@@ -142,15 +142,17 @@
             </div>
 
             <div class="form-row">
-              <label for="barcode">Barcode</label>
+              <label for="barcode">Barcode / Item Code</label>
               <div class="input-icon-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M2 4v16h2V4H2zm4 0v16h1V4H6zm2 0v16h2V4H8zm3 0v16h1V4h-1zm2 0v16h2V4h-2zm3 0v16h1V4h-1zm2 0v16h2V4h-2z"/>
                 </svg>
+                <!-- ── UPDATED: placeholder covers both barcode and item code ── -->
                 <input type="text" id="barcode" name="barcode"
-                       placeholder="Scan or type barcode…" autocomplete="off" required>
+                       placeholder="Scan barcode or type item code…" autocomplete="off" required>
               </div>
-              <span class="note">Press Enter or click away to fetch item.</span>
+              <!-- ── UPDATED: note reflects dual search ── -->
+              <span class="note">Press Enter or click away to fetch by barcode or item code.</span>
             </div>
 
             <div id="itemDetailsExisting" class="status-box found-box hidden">

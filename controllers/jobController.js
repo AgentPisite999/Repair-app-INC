@@ -1,3 +1,4 @@
+
 // const {
 //   db,
 //   getISTTimestamp,
@@ -7,8 +8,6 @@
 // const https = require("https");
 // const http = require("http");
 // const { URL } = require("url");
-
-// require("dotenv").config();
 
 // const SMS_URL = (process.env.SMS_URL || "").trim();
 // const SMS_AUTHTOKEN = (process.env.SMS_AUTHTOKEN || "").trim();
@@ -33,28 +32,38 @@
 // const generateUniqueJobId = async () => {
 //   while (true) {
 //     const jobId = `JOB-${Math.floor(1000000 + Math.random() * 9000000)}`;
-//     const r1 = await db.query(`SELECT 1 FROM job_data WHERE "Job_Id" = $1`, [
-//       jobId,
-//     ]);
+
+//     const r1 = await db.query(
+//       `SELECT 1 FROM repair_app.job_data WHERE "Job_Id" = $1`,
+//       [jobId],
+//     );
 //     if (r1.rows.length > 0) continue;
-//     const r2 = await db.query(`SELECT 1 FROM otp_store WHERE job_id = $1`, [
-//       jobId,
-//     ]);
+
+//     const r2 = await db.query(
+//       `SELECT 1 FROM repair_app.otp_store WHERE job_id = $1`,
+//       [jobId],
+//     );
 //     if (r2.rows.length > 0) continue;
+
 //     return jobId;
 //   }
 // };
 
 // const generateNextCustomerId = async () => {
 //   const result = await db.query(
-//     `SELECT customer_id FROM "Customer_Master"
+//     `SELECT customer_id
+//      FROM repair_app."Customer_Master"
 //      WHERE customer_id LIKE 'CUS-%'
-//      ORDER BY customer_id DESC LIMIT 1`,
+//      ORDER BY customer_id DESC
+//      LIMIT 1`,
 //   );
+
 //   const row = result.rows[0];
 //   if (!row || !row.customer_id) return "CUS-000001";
+
 //   const lastNum = parseInt(row.customer_id.replace("CUS-", ""), 10);
 //   if (isNaN(lastNum)) return "CUS-000001";
+
 //   return `CUS-${String(lastNum + 1).padStart(6, "0")}`;
 // };
 
@@ -64,6 +73,7 @@
 //       console.warn("SMS not configured. Skipping SMS send.");
 //       return resolve("SMS_NOT_CONFIGURED");
 //     }
+
 //     try {
 //       const url = new URL(SMS_URL);
 //       url.searchParams.set("authtoken", SMS_AUTHTOKEN);
@@ -83,6 +93,7 @@
 //       console.log("========================\n");
 
 //       const protocol = url.protocol === "https:" ? https : http;
+
 //       protocol
 //         .get(url.toString(), (res) => {
 //           let data = "";
@@ -125,19 +136,19 @@
 //   try {
 //     const reasonsResult = await db.query(
 //       `SELECT reason_id AS "ReasonID", reason_name AS "ReasonName"
-//        FROM "Damage_Reason_Master"
+//        FROM repair_app."Damage_Reason_Master"
 //        WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
 //     );
 
 //     const whResult = await db.query(
 //       `SELECT wh_id AS "WhID", warehouse_name AS "WarehouseName"
-//        FROM "Warehouse_Master"
+//        FROM repair_app."Warehouse_Master"
 //        WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
 //     );
 
 //     const courierResult = await db.query(
 //       `SELECT courier_id AS "CourierID", courier_name AS "CourierName"
-//        FROM "Courier_Master"
+//        FROM repair_app."Courier_Master"
 //        WHERE active IS NULL OR TRIM(LOWER(active)) = 'true'`,
 //     );
 
@@ -149,24 +160,33 @@
 //       couriers: courierResult.rows || [],
 //     });
 //   } catch (err) {
-//     console.error(err.message);
+//     console.error(err);
 //     return res.status(500).send("Server error");
 //   }
 // };
 
 // const getItemByBarcode = async (req, res) => {
 //   const { barcode } = req.query;
-//   if (!barcode)
+
+//   if (!barcode) {
 //     return res.json({ success: false, message: "Barcode is required" });
+//   }
 
 //   try {
 //     const result = await db.query(
-//       `SELECT barcode, item_code, division, section, department, remarks
-//        FROM "Item_Master" WHERE barcode = $1`,
+//       `SELECT barcode, item_code, division, section, department,
+//               category2, category3, category4, rsp, remarks
+//        FROM repair_app."Item_Master"
+//        WHERE barcode = $1`,
 //       [barcode.trim()],
 //     );
+
 //     const row = result.rows[0];
-//     if (!row) return res.json({ success: true, found: false });
+
+//     if (!row) {
+//       return res.json({ success: true, found: false });
+//     }
+
 //     return res.json({
 //       success: true,
 //       found: true,
@@ -176,28 +196,41 @@
 //         division: row.division,
 //         section: row.section,
 //         department: row.department,
+//         category2: row.category2 || "",
+//         category3: row.category3 || "",
+//         category4: row.category4 || "",
+//         rsp: row.rsp || "",
 //         remarks: row.remarks || "",
 //       },
 //     });
 //   } catch (err) {
+//     console.error(err);
 //     return res.json({ success: false, message: "Server error" });
 //   }
 // };
 
 // const getCustomerByNumber = async (req, res) => {
 //   const { customerNumber } = req.query;
-//   if (!customerNumber)
+
+//   if (!customerNumber) {
 //     return res.json({ success: false, message: "Customer number is required" });
+//   }
 
 //   try {
 //     const result = await db.query(
 //       `SELECT phone, customer_name, address, city, state, pincode,
 //               whatsapp_ok, sms_ok, email, remarks
-//        FROM "Customer_Master" WHERE phone = $1`,
+//        FROM repair_app."Customer_Master"
+//        WHERE phone = $1`,
 //       [customerNumber.trim()],
 //     );
+
 //     const row = result.rows[0];
-//     if (!row) return res.json({ success: true, found: false });
+
+//     if (!row) {
+//       return res.json({ success: true, found: false });
+//     }
+
 //     return res.json({
 //       success: true,
 //       found: true,
@@ -215,6 +248,7 @@
 //       },
 //     });
 //   } catch (err) {
+//     console.error(err);
 //     return res.json({ success: false, message: "Server error" });
 //   }
 // };
@@ -228,6 +262,7 @@
 
 //   const rawPhone = phone.trim();
 //   const mobile = normalizeMobile(rawPhone);
+
 //   if (!mobile) {
 //     return res.json({
 //       success: false,
@@ -237,22 +272,25 @@
 
 //   try {
 //     await cleanExpiredOTPs();
-//     await db.query(`DELETE FROM otp_store WHERE phone = $1`, [rawPhone]);
+//     await db.query(`DELETE FROM repair_app.otp_store WHERE phone = $1`, [
+//       rawPhone,
+//     ]);
 
 //     const otp = generateOTP();
 //     const istNow = getISTTimestamp();
 //     const expiresAt = getISTDate(5 * 60 * 1000);
-
 //     const jobId = await generateUniqueJobId();
 //     const custName = (customer_name || "Customer").trim();
 
 //     await db.query(
-//       `INSERT INTO otp_store (phone, otp, job_id, customer_name, created_at, expires_at)
+//       `INSERT INTO repair_app.otp_store
+//        (phone, otp, job_id, customer_name, created_at, expires_at)
 //        VALUES ($1, $2, $3, $4, $5, $6)`,
 //       [rawPhone, otp, jobId, custName, istNow, expiresAt],
 //     );
 
 //     const message = buildCreationSMS(otp, jobId);
+
 //     try {
 //       await sendSMS(mobile, message, SMS_TEMPLATE_ID_CREATE);
 //     } catch (smsErr) {
@@ -264,10 +302,10 @@
 //     return res.json({
 //       success: true,
 //       message: "OTP sent successfully",
-//       jobId: jobId,
+//       jobId,
 //     });
 //   } catch (err) {
-//     console.error("sendOtp error:", err.message);
+//     console.error("sendOtp error:", err);
 //     return res
 //       .status(500)
 //       .json({ success: false, message: "Failed to send OTP" });
@@ -276,38 +314,52 @@
 
 // const sendClosureOtp = async (req, res) => {
 //   const { jobId } = req.body;
-//   if (!jobId)
+
+//   if (!jobId) {
 //     return res.json({ success: false, message: "Job ID is required" });
+//   }
 
 //   try {
 //     const jobResult = await db.query(
-//       `SELECT "CustomerNumber", "CustomerName", "Status" FROM job_data WHERE "Job_Id" = $1`,
+//       `SELECT "CustomerNumber", "CustomerName", "Status"
+//        FROM repair_app.job_data
+//        WHERE "Job_Id" = $1`,
 //       [jobId],
 //     );
+
 //     const job = jobResult.rows[0];
-//     if (!job) return res.json({ success: false, message: "Job not found" });
-//     if ((job.Status || "").toLowerCase() === "closed")
+
+//     if (!job) {
+//       return res.json({ success: false, message: "Job not found" });
+//     }
+
+//     if ((job.Status || "").toLowerCase() === "closed") {
 //       return res.json({ success: false, message: "Ticket already closed" });
+//     }
 
 //     const rawPhone = (job.CustomerNumber || "").trim();
-//     if (!rawPhone)
+
+//     if (!rawPhone) {
 //       return res.json({
 //         success: false,
 //         message: "No customer phone number on this job",
 //       });
+//     }
 
 //     const mobile = normalizeMobile(rawPhone);
-//     if (!mobile)
+
+//     if (!mobile) {
 //       return res.json({
 //         success: false,
 //         message: "Invalid customer phone number on this job",
 //       });
+//     }
 
 //     await cleanExpiredOTPs();
-//     await db.query(`DELETE FROM otp_store WHERE phone = $1 AND job_id = $2`, [
-//       rawPhone,
-//       jobId,
-//     ]);
+//     await db.query(
+//       `DELETE FROM repair_app.otp_store WHERE phone = $1 AND job_id = $2`,
+//       [rawPhone, jobId],
+//     );
 
 //     const otp = generateOTP();
 //     const istNow = getISTTimestamp();
@@ -315,12 +367,14 @@
 //     const custName = (job.CustomerName || "Customer").trim();
 
 //     await db.query(
-//       `INSERT INTO otp_store (phone, otp, job_id, customer_name, created_at, expires_at)
+//       `INSERT INTO repair_app.otp_store
+//        (phone, otp, job_id, customer_name, created_at, expires_at)
 //        VALUES ($1, $2, $3, $4, $5, $6)`,
 //       [rawPhone, otp, jobId, custName, istNow, expiresAt],
 //     );
 
 //     const message = buildClosureSMS(otp, jobId);
+
 //     try {
 //       await sendSMS(mobile, message, SMS_TEMPLATE_ID_CLOSE);
 //     } catch (smsErr) {
@@ -328,13 +382,14 @@
 //     }
 
 //     console.log(`✓ Closure OTP ${otp} sent to ${mobile} for Job ${jobId}`);
+
 //     return res.json({
 //       success: true,
 //       message: "OTP sent successfully",
 //       phone: rawPhone,
 //     });
 //   } catch (err) {
-//     console.error("sendClosureOtp error:", err.message);
+//     console.error("sendClosureOtp error:", err);
 //     return res
 //       .status(500)
 //       .json({ success: false, message: "Failed to send OTP" });
@@ -359,21 +414,26 @@
 //     let result;
 //     if (jobId) {
 //       result = await db.query(
-//         `SELECT otp, job_id FROM otp_store
+//         `SELECT otp, job_id
+//          FROM repair_app.otp_store
 //          WHERE phone = $1 AND job_id = $2 AND expires_at > $3
-//          ORDER BY created_at DESC LIMIT 1`,
+//          ORDER BY created_at DESC
+//          LIMIT 1`,
 //         [phone.trim(), jobId, istNow],
 //       );
 //     } else {
 //       result = await db.query(
-//         `SELECT otp, job_id FROM otp_store
+//         `SELECT otp, job_id
+//          FROM repair_app.otp_store
 //          WHERE phone = $1 AND expires_at > $2
-//          ORDER BY created_at DESC LIMIT 1`,
+//          ORDER BY created_at DESC
+//          LIMIT 1`,
 //         [phone.trim(), istNow],
 //       );
 //     }
 
 //     const row = result.rows[0];
+
 //     if (!row) {
 //       return res.json({
 //         success: true,
@@ -381,9 +441,15 @@
 //         message: "OTP expired or not found",
 //       });
 //     }
+
 //     if (row.otp !== otp.trim()) {
-//       return res.json({ success: true, valid: false, message: "Invalid OTP" });
+//       return res.json({
+//         success: true,
+//         valid: false,
+//         message: "Invalid OTP",
+//       });
 //     }
+
 //     return res.json({
 //       success: true,
 //       valid: true,
@@ -391,7 +457,7 @@
 //       jobId: row.job_id,
 //     });
 //   } catch (err) {
-//     console.error("OTP verify error:", err.message);
+//     console.error("OTP verify error:", err);
 //     return res.json({ success: false, valid: false, message: "Server error" });
 //   }
 // };
@@ -408,6 +474,10 @@
 //     division,
 //     section,
 //     department,
+//     category2,
+//     category3,
+//     category4,
+//     rsp,
 //     item_remarks,
 //     item_missing,
 //     product_under_90,
@@ -448,11 +518,14 @@
 //     const istNow = getISTTimestamp();
 
 //     const otpResult = await db.query(
-//       `SELECT otp, job_id FROM otp_store
+//       `SELECT otp, job_id
+//        FROM repair_app.otp_store
 //        WHERE phone = $1 AND expires_at > $2
-//        ORDER BY created_at DESC LIMIT 1`,
+//        ORDER BY created_at DESC
+//        LIMIT 1`,
 //       [customer_number.trim(), istNow],
 //     );
+
 //     const otpRow = otpResult.rows[0];
 
 //     if (!otpRow || otpRow.otp !== verified_otp.trim()) {
@@ -486,10 +559,9 @@
 //       newCustomerId = await generateNextCustomerId();
 //     }
 
-//     // ── Insert missing item ──
 //     if (item_missing === "true" && barcode) {
 //       await db.query(
-//         `INSERT INTO "Item_Master"
+//         `INSERT INTO repair_app."Item_Master"
 //          (barcode, item_code, division, section, department, active, created_by, creation_date, remarks)
 //          VALUES ($1, '', '', '', '', 'True', $2, $3, $4)
 //          ON CONFLICT (barcode) DO NOTHING`,
@@ -502,10 +574,9 @@
 //       );
 //     }
 
-//     // ── Insert missing customer ──
 //     if (customer_missing === "true" && customer_number && newCustomerId) {
 //       await db.query(
-//         `INSERT INTO "Customer_Master"
+//         `INSERT INTO repair_app."Customer_Master"
 //          (customer_id, customer_name, phone, address, city, state, pincode,
 //           whatsapp_ok, sms_ok, active, email, remarks, created_by, created_date)
 //          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'True', $10, $11, $12, $13)
@@ -529,17 +600,17 @@
 //       console.log(`✓ New customer: ${newCustomerId}`);
 //     }
 
-//     // ── Insert job ──
 //     const sql = `
-//       INSERT INTO job_data (
+//       INSERT INTO repair_app.job_data (
 //         "Job_Id", "JobType", "BARCODE", "ITEM_ID", "DIVISION", "SECTION", "DEPARTMENT",
+//         "Category2", "Category3", "Category4", "RSP",
 //         "ItemRemarks", "ItemCreation_Date", "ProductUnder90Days", "DamageReason",
 //         "DamageRemarks", "DeliveryDate", "CustomerNumber", "CustomerName", "Email",
 //         "Pincode", "City", "State", "Address", "WhatsAppOK", "SMSOK", "CustomerRemarks",
 //         "WarehouseID", "WarehouseName", "CourierName", "AWB", "DispatchDate",
 //         "WarehouseRemarks", "WarehouseAttachment", "Attachment", "Comments",
 //         "Store_Id", "Status", "CreatedAt"
-//       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
+//       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39)
 //     `;
 
 //     const values = [
@@ -550,6 +621,10 @@
 //       (division || "").trim(),
 //       (section || "").trim(),
 //       (department || "").trim(),
+//       (category2 || "").trim(),
+//       (category3 || "").trim(),
+//       (category4 || "").trim(),
+//       (rsp || "").trim(),
 //       (item_remarks || "").trim(),
 //       istNow,
 //       product_under_90 || "No",
@@ -580,8 +655,8 @@
 //       istNow,
 //     ];
 
-//     if (values.length !== 35) {
-//       console.error(`VALUE COUNT MISMATCH: expected 35, got ${values.length}`);
+//     if (values.length !== 39) {
+//       console.error(`VALUE COUNT MISMATCH: expected 39, got ${values.length}`);
 //       return res
 //         .status(500)
 //         .json({ success: false, message: "Internal column count error" });
@@ -589,10 +664,10 @@
 
 //     await db.query(sql, values);
 
-//     await db.query(`DELETE FROM otp_store WHERE phone = $1 AND job_id = $2`, [
-//       customer_number.trim(),
-//       jobId,
-//     ]);
+//     await db.query(
+//       `DELETE FROM repair_app.otp_store WHERE phone = $1 AND job_id = $2`,
+//       [customer_number.trim(), jobId],
+//     );
 
 //     return res.json({
 //       success: true,
@@ -601,7 +676,7 @@
 //       customerId: newCustomerId || null,
 //     });
 //   } catch (err) {
-//     console.error("createJob error:", err.message);
+//     console.error("createJob error:", err);
 //     return res
 //       .status(500)
 //       .json({ success: false, message: "Failed to create job" });
@@ -617,6 +692,7 @@
 //   verifyOtp,
 //   createJob,
 // };
+
 
 const {
   db,
@@ -784,11 +860,13 @@ const renderJobCreation = async (req, res) => {
   }
 };
 
+// ── UPDATED: searches by barcode OR item_code ──
 const getItemByBarcode = async (req, res) => {
-  const { barcode } = req.query;
+  const { barcode, search } = req.query;
+  const searchVal = (search || barcode || "").trim();
 
-  if (!barcode) {
-    return res.json({ success: false, message: "Barcode is required" });
+  if (!searchVal) {
+    return res.json({ success: false, message: "Barcode or item code is required" });
   }
 
   try {
@@ -796,8 +874,8 @@ const getItemByBarcode = async (req, res) => {
       `SELECT barcode, item_code, division, section, department,
               category2, category3, category4, rsp, remarks
        FROM repair_app."Item_Master"
-       WHERE barcode = $1`,
-      [barcode.trim()],
+       WHERE barcode = $1 OR item_code = $1`,
+      [searchVal],
     );
 
     const row = result.rows[0];
