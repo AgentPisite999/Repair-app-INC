@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Job Creation — Inc.5 Repair Portal</title>
   <link rel="stylesheet" href="/css/job-creation.css">
+
 </head>
 <body>
 
@@ -81,14 +82,14 @@
         <input type="hidden" id="pre_generated_job_id" name="pre_generated_job_id" value="">
 
         <!-- These stay hidden for form submission -->
-        <input type="hidden" id="item_id" name="item_id" value="">
-        <input type="hidden" id="division" name="division" value="">
-        <input type="hidden" id="section" name="section" value="">
+        <input type="hidden" id="item_id"    name="item_id"    value="">
+        <input type="hidden" id="division"   name="division"   value="">
+        <input type="hidden" id="section"    name="section"    value="">
         <input type="hidden" id="department" name="department" value="">
-        <input type="hidden" id="category2" name="category2" value="">
-        <input type="hidden" id="category3" name="category3" value="">
-        <input type="hidden" id="category4" name="category4" value="">
-        <input type="hidden" id="rsp" name="rsp" value="">
+        <input type="hidden" id="category2"  name="category2"  value="">
+        <input type="hidden" id="category3"  name="category3"  value="">
+        <input type="hidden" id="category4"  name="category4"  value="">
+        <input type="hidden" id="rsp"        name="rsp"        value="">
 
         <!-- ── TOP BAR ── -->
         <div class="jc-top-bar">
@@ -112,8 +113,8 @@
             </select>
           </div>
           <div class="top-bar-messages">
-            <div id="jobError"   class="msg-error"  style="display:none;"></div>
-            <div id="jobSuccess" class="msg-success" style="display:none;"></div>
+            <div id="jobError"   class="msg-error"   style="display:none;"></div>
+            <div id="jobSuccess" class="msg-success"  style="display:none;"></div>
           </div>
           <div class="job-form-actions">
             <button type="button" class="btn-secondary" id="resetJobBtn">
@@ -142,19 +143,29 @@
             </div>
 
             <div class="form-row">
-              <label for="barcode">Barcode / Item Code</label>
+              <label for="barcode">Barcode / Item Code / Style</label>
               <div class="input-icon-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M2 4v16h2V4H2zm4 0v16h1V4H6zm2 0v16h2V4H8zm3 0v16h1V4h-1zm2 0v16h2V4h-2zm3 0v16h1V4h-1zm2 0v16h2V4h-2z"/>
                 </svg>
-                <!-- ── UPDATED: placeholder covers both barcode and item code ── -->
                 <input type="text" id="barcode" name="barcode"
-                      placeholder="Scan barcode, item code or style…" autocomplete="off" required>
+                       placeholder="Barcode · Item Code · Style · Style Color · Style Color Size"
+                       autocomplete="off" required>
               </div>
-              <!-- ── UPDATED: note reflects dual search ── -->
-              <span class="note">Press Enter or click away to fetch by barcode, item code or style.</span>
+              <span class="note">
+                Enter barcode or item code for exact match.<br>
+                For style search use space or comma: <em>100550</em> &nbsp;|&nbsp;
+                <em>100550 BLACK</em> &nbsp;|&nbsp; <em>100550,BLACK,35/04</em>
+              </span>
+
+              <!-- ── Live search loader ── -->
+              <div id="itemSearchLoader" class="item-search-loader hidden">
+                <div class="item-search-spinner"></div>
+                <span>Searching…</span>
+              </div>
             </div>
 
+            <!-- ── Item found (unique) ── -->
             <div id="itemDetailsExisting" class="status-box found-box hidden">
               <span class="status-pill green">✓ Item Found</span>
               <div class="form-row-inline" style="margin-top:8px;">
@@ -179,6 +190,7 @@
               </div>
             </div>
 
+            <!-- ── Item not found ── -->
             <input type="hidden" id="item_missing" name="item_missing" value="false">
             <div id="itemDetailsNew" class="status-box warn-box hidden">
               <span class="status-pill amber">⚠ Not Found – will be appended</span>
@@ -187,6 +199,14 @@
                 <textarea id="item_remarks" name="item_remarks"
                           placeholder="Required – add remarks for this barcode…"></textarea>
               </div>
+            </div>
+
+            <!-- ── Multiple items picker ── -->
+            <div id="itemPickerWrap" class="item-picker-wrap hidden">
+              <label>Multiple items found — select one:</label>
+              <select id="itemPickerSelect" class="item-picker-select" size="6">
+              </select>
+              <p class="item-picker-note">Click a row to auto-fill item details.</p>
             </div>
 
             <div class="col-divider"></div>

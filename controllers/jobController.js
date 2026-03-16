@@ -165,11 +165,13 @@
 //   }
 // };
 
+// // ── UPDATED: searches by barcode OR item_code ──
 // const getItemByBarcode = async (req, res) => {
-//   const { barcode } = req.query;
+//   const { barcode, search } = req.query;
+//   const searchVal = (search || barcode || "").trim();
 
-//   if (!barcode) {
-//     return res.json({ success: false, message: "Barcode is required" });
+//   if (!searchVal) {
+//     return res.json({ success: false, message: "Barcode or item code is required" });
 //   }
 
 //   try {
@@ -177,8 +179,8 @@
 //       `SELECT barcode, item_code, division, section, department,
 //               category2, category3, category4, rsp, remarks
 //        FROM repair_app."Item_Master"
-//        WHERE barcode = $1`,
-//       [barcode.trim()],
+//        WHERE barcode = $1 OR item_code = $1 OR LOWER(category2) = LOWER($1)`,
+//       [searchVal],
 //     );
 
 //     const row = result.rows[0];
@@ -694,6 +696,7 @@
 // };
 
 
+
 const {
   db,
   getISTTimestamp,
@@ -860,46 +863,110 @@ const renderJobCreation = async (req, res) => {
   }
 };
 
-// ── UPDATED: searches by barcode OR item_code ──
+// ── UPDATED: searches by barcode, item_code, or style (category2)
+//            supports space/comma-separated: style [color] [size]
 const getItemByBarcode = async (req, res) => {
   const { barcode, search } = req.query;
   const searchVal = (search || barcode || "").trim();
 
   if (!searchVal) {
-    return res.json({ success: false, message: "Barcode or item code is required" });
+    return res.json({ success: false, message: "Search value is required" });
   }
 
+  // Helper to map a DB row to the item object shape
+  const rowToItem = (row) => ({
+    barcode:    row.barcode,
+    item_id:    row.item_code,
+    division:   row.division,
+    section:    row.section,
+    department: row.department,
+    category2:  row.category2  || "",
+    category3:  row.category3  || "",
+    category4:  row.category4  || "",
+    rsp:        row.rsp        || "",
+    remarks:    row.remarks    || "",
+  });
+
   try {
-    const result = await db.query(
+    // ── 1. Exact barcode or item_code match (unique, highest priority) ──
+    const exactResult = await db.query(
       `SELECT barcode, item_code, division, section, department,
               category2, category3, category4, rsp, remarks
        FROM repair_app."Item_Master"
-       WHERE barcode = $1 OR item_code = $1 OR LOWER(category2) = LOWER($1)`,
+       WHERE barcode = $1 OR item_code = $1`,
       [searchVal],
     );
 
-    const row = result.rows[0];
-
-    if (!row) {
-      return res.json({ success: true, found: false });
+    if (exactResult.rows.length > 0) {
+      return res.json({
+        success:  true,
+        found:    true,
+        multiple: false,
+        item:     rowToItem(exactResult.rows[0]),
+      });
     }
 
+    // ── 2. Split input by comma OR whitespace into up to 3 parts ──
+    //       parts[0] = style (category2)
+    //       parts[1] = color (category3)   — optional
+    //       parts[2] = size  (category4)   — optional
+    const parts = searchVal
+      .split(/[\s,]+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const [stylePart, colorPart, sizePart] = parts;
+
+    if (!stylePart) {
+      return res.json({ success: true, found: false, multiple: false });
+    }
+
+    // Build dynamic WHERE clause
+    const conditions = [`LOWER(category2) = LOWER($1)`];
+    const params     = [stylePart];
+    let   idx        = 2;
+
+    if (colorPart) {
+      conditions.push(`LOWER(category3) = LOWER($${idx++})`);
+      params.push(colorPart);
+    }
+    if (sizePart) {
+      conditions.push(`LOWER(category4) = LOWER($${idx++})`);
+      params.push(sizePart);
+    }
+
+    const styleResult = await db.query(
+      `SELECT barcode, item_code, division, section, department,
+              category2, category3, category4, rsp, remarks
+       FROM repair_app."Item_Master"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY category3, category4
+       LIMIT 100`,
+      params,
+    );
+
+    if (styleResult.rows.length === 0) {
+      return res.json({ success: true, found: false, multiple: false });
+    }
+
+    // ── 3. Single match → auto-fill ──
+    if (styleResult.rows.length === 1) {
+      return res.json({
+        success:  true,
+        found:    true,
+        multiple: false,
+        item:     rowToItem(styleResult.rows[0]),
+      });
+    }
+
+    // ── 4. Multiple matches → return list for dropdown ──
     return res.json({
-      success: true,
-      found: true,
-      item: {
-        barcode: row.barcode,
-        item_id: row.item_code,
-        division: row.division,
-        section: row.section,
-        department: row.department,
-        category2: row.category2 || "",
-        category3: row.category3 || "",
-        category4: row.category4 || "",
-        rsp: row.rsp || "",
-        remarks: row.remarks || "",
-      },
+      success:  true,
+      found:    true,
+      multiple: true,
+      items:    styleResult.rows.map(rowToItem),
     });
+
   } catch (err) {
     console.error(err);
     return res.json({ success: false, message: "Server error" });
@@ -932,16 +999,16 @@ const getCustomerByNumber = async (req, res) => {
       success: true,
       found: true,
       customer: {
-        phone: row.phone,
-        name: row.customer_name || "",
-        address: row.address,
-        city: row.city,
-        state: row.state,
-        pincode: row.pincode,
-        email: row.email,
-        whatsapp_ok: row.whatsapp_ok || "False",
-        sms_ok: row.sms_ok || "False",
-        remarks: row.remarks || "",
+        phone:        row.phone,
+        name:         row.customer_name || "",
+        address:      row.address,
+        city:         row.city,
+        state:        row.state,
+        pincode:      row.pincode,
+        email:        row.email,
+        whatsapp_ok:  row.whatsapp_ok || "False",
+        sms_ok:       row.sms_ok      || "False",
+        remarks:      row.remarks     || "",
       },
     });
   } catch (err) {
@@ -958,7 +1025,7 @@ const sendOtp = async (req, res) => {
   }
 
   const rawPhone = phone.trim();
-  const mobile = normalizeMobile(rawPhone);
+  const mobile   = normalizeMobile(rawPhone);
 
   if (!mobile) {
     return res.json({
@@ -973,11 +1040,11 @@ const sendOtp = async (req, res) => {
       rawPhone,
     ]);
 
-    const otp = generateOTP();
-    const istNow = getISTTimestamp();
+    const otp       = generateOTP();
+    const istNow    = getISTTimestamp();
     const expiresAt = getISTDate(5 * 60 * 1000);
-    const jobId = await generateUniqueJobId();
-    const custName = (customer_name || "Customer").trim();
+    const jobId     = await generateUniqueJobId();
+    const custName  = (customer_name || "Customer").trim();
 
     await db.query(
       `INSERT INTO repair_app.otp_store
@@ -1058,10 +1125,10 @@ const sendClosureOtp = async (req, res) => {
       [rawPhone, jobId],
     );
 
-    const otp = generateOTP();
-    const istNow = getISTTimestamp();
+    const otp       = generateOTP();
+    const istNow    = getISTTimestamp();
     const expiresAt = getISTDate(5 * 60 * 1000);
-    const custName = (job.CustomerName || "Customer").trim();
+    const custName  = (job.CustomerName || "Customer").trim();
 
     await db.query(
       `INSERT INTO repair_app.otp_store
@@ -1083,7 +1150,7 @@ const sendClosureOtp = async (req, res) => {
     return res.json({
       success: true,
       message: "OTP sent successfully",
-      phone: rawPhone,
+      phone:   rawPhone,
     });
   } catch (err) {
     console.error("sendClosureOtp error:", err);
@@ -1099,7 +1166,7 @@ const verifyOtp = async (req, res) => {
   if (!phone || !otp) {
     return res.json({
       success: false,
-      valid: false,
+      valid:   false,
       message: "Phone and OTP are required",
     });
   }
@@ -1134,7 +1201,7 @@ const verifyOtp = async (req, res) => {
     if (!row) {
       return res.json({
         success: true,
-        valid: false,
+        valid:   false,
         message: "OTP expired or not found",
       });
     }
@@ -1142,16 +1209,16 @@ const verifyOtp = async (req, res) => {
     if (row.otp !== otp.trim()) {
       return res.json({
         success: true,
-        valid: false,
+        valid:   false,
         message: "Invalid OTP",
       });
     }
 
     return res.json({
       success: true,
-      valid: true,
+      valid:   true,
       message: "OTP verified",
-      jobId: row.job_id,
+      jobId:   row.job_id,
     });
   } catch (err) {
     console.error("OTP verify error:", err);
@@ -1160,9 +1227,9 @@ const verifyOtp = async (req, res) => {
 };
 
 const createJob = async (req, res) => {
-  const files = req.files || {};
-  const mainFile = files["attachment"] ? files["attachment"][0] : null;
-  const whFile = files["wh_attachment"] ? files["wh_attachment"][0] : null;
+  const files    = req.files || {};
+  const mainFile = files["attachment"]    ? files["attachment"][0]    : null;
+  const whFile   = files["wh_attachment"] ? files["wh_attachment"][0] : null;
 
   const {
     jobType,
@@ -1243,9 +1310,9 @@ const createJob = async (req, res) => {
       if (!file) return null;
       return JSON.stringify({
         originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
-        buffer: file.buffer ? file.buffer.toString("base64") : null,
+        mimetype:     file.mimetype,
+        size:         file.size,
+        buffer:       file.buffer ? file.buffer.toString("base64") : null,
       });
     };
 
@@ -1280,15 +1347,15 @@ const createJob = async (req, res) => {
          ON CONFLICT (customer_id) DO NOTHING`,
         [
           newCustomerId,
-          (customer_name || "").trim(),
+          (customer_name    || "").trim(),
           customer_number.trim(),
-          (address || "").trim(),
-          (city || "").trim(),
-          (state || "").trim(),
-          (pincode || "").trim(),
-          whatsapp_ok || "False",
-          sms_ok || "False",
-          (email || "").trim(),
+          (address          || "").trim(),
+          (city             || "").trim(),
+          (state            || "").trim(),
+          (pincode          || "").trim(),
+          whatsapp_ok       || "False",
+          sms_ok            || "False",
+          (email            || "").trim(),
           (customer_remarks || "").trim(),
           req.session.userIdDisplay || "system",
           istNow,
@@ -1312,41 +1379,41 @@ const createJob = async (req, res) => {
 
     const values = [
       jobId,
-      jobType || "",
-      (barcode || "").trim(),
-      (item_id || "").trim(),
-      (division || "").trim(),
-      (section || "").trim(),
-      (department || "").trim(),
-      (category2 || "").trim(),
-      (category3 || "").trim(),
-      (category4 || "").trim(),
-      (rsp || "").trim(),
-      (item_remarks || "").trim(),
+      jobType                                  || "",
+      (barcode              || "").trim(),
+      (item_id              || "").trim(),
+      (division             || "").trim(),
+      (section              || "").trim(),
+      (department           || "").trim(),
+      (category2            || "").trim(),
+      (category3            || "").trim(),
+      (category4            || "").trim(),
+      (rsp                  || "").trim(),
+      (item_remarks         || "").trim(),
       istNow,
-      product_under_90 || "No",
-      damage_reason_display || damage_reason || "",
+      product_under_90                         || "No",
+      damage_reason_display || damage_reason   || "",
       (damage_reason_other_remarks || "").trim(),
-      delivery_date || "",
-      (customer_number || "").trim(),
-      (customer_name || "").trim(),
-      (email || "").trim(),
-      (pincode || "").trim(),
-      (city || "").trim(),
-      (state || "").trim(),
-      (address || "").trim(),
-      whatsapp_ok || "False",
-      sms_ok || "False",
-      (customer_remarks || "").trim(),
-      (warehouse_id || "").trim(),
-      (warehouse_name || "").trim(),
-      (courier_name || "").trim(),
-      (awb || "").trim(),
-      dispatch_date || "",
-      (warehouse_remarks || "").trim(),
+      delivery_date                            || "",
+      (customer_number      || "").trim(),
+      (customer_name        || "").trim(),
+      (email                || "").trim(),
+      (pincode              || "").trim(),
+      (city                 || "").trim(),
+      (state                || "").trim(),
+      (address              || "").trim(),
+      whatsapp_ok                              || "False",
+      sms_ok                                   || "False",
+      (customer_remarks     || "").trim(),
+      (warehouse_id         || "").trim(),
+      (warehouse_name       || "").trim(),
+      (courier_name         || "").trim(),
+      (awb                  || "").trim(),
+      dispatch_date                            || "",
+      (warehouse_remarks    || "").trim(),
       toAttJson(whFile),
       toAttJson(mainFile),
-      (comments || "").trim(),
+      (comments             || "").trim(),
       storeId,
       "Open",
       istNow,
@@ -1367,8 +1434,8 @@ const createJob = async (req, res) => {
     );
 
     return res.json({
-      success: true,
-      message: "Job created successfully",
+      success:    true,
+      message:    "Job created successfully",
       jobId,
       customerId: newCustomerId || null,
     });
