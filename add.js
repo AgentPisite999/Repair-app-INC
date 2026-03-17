@@ -6,6 +6,7 @@ const { db } = require("./config/database");
 const users = [
   // Test Users
   { user_id: "Test", password: "1234", role: "Store" },
+  { user_id: "TestWH", password: "1234", role: "Warehouse - WH" },
   // { user_id: "TestAdmin", password: "1234", role: "Admin" },
   // { user_id: "TestDashboard", password: "1234", role: "Dashboard" },
   // { user_id: "TestRM", password: "1234", role: "RM" },

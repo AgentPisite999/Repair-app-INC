@@ -61,7 +61,7 @@ const buildProductReadySMS = (jobId) => {
   return (
     `Your product with Job ID ${jobId} is ready for pickup. ` +
     `Please collect it from store. ` +
-    `Thank you for choosing INC5.`
+    `Thanks for choosing Inc.5`
   );
 };
 
@@ -940,9 +940,9 @@ const generateReceipt = async (req, res) => {
       const raw = (value || "").toString().trim();
       const typedMatch = raw.match(/^(.+?)\s*-\s*Typed\s*$/i);
       if (typedMatch) {
-        doc.text(typedMatch[1].trim(), ML + 135, yy, { width: CW - 135, continued: false });
+        doc.text(typedMatch[1].trim() + " ", ML + 135, yy, { width: CW - 135, continued: true });
         doc.fontSize(6).font("Helvetica-Bold").fillColor("#b45309");
-        doc.text(" [Typed]", ML + 135 + doc.widthOfString(typedMatch[1].trim()), yy);
+        doc.text("[Typed]", { continued: false });
       } else {
         doc.text(raw || "—", ML + 135, yy, { width: CW - 135 });
       }
