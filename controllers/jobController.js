@@ -726,24 +726,62 @@ const generateOTP = () => {
   return String(Math.floor(100000 + Math.random() * 900000));
 };
 
-const generateUniqueJobId = async () => {
-  while (true) {
-    const jobId = `JOB-${Math.floor(1000000 + Math.random() * 9000000)}`;
+const getFinancialYear = () => {
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const ist = new Date(now.getTime() + istOffset);
+  const month = ist.getUTCMonth() + 1; // 1-12
+  const year = ist.getUTCFullYear();
+  // Indian FY: April to March
+  const startYear = month >= 4 ? year : year - 1;
+  const endYear = startYear + 1;
+  return `${startYear}-${String(endYear).slice(2)}`; // e.g. "2026-27"
+};
 
-    const r1 = await db.query(
-      `SELECT 1 FROM repair_app.job_data WHERE "Job_Id" = $1`,
-      [jobId],
-    );
-    if (r1.rows.length > 0) continue;
+const generateUniqueJobId = async (storeCode) => {
+  const fy = getFinancialYear();
+  const prefix = `${storeCode}/`;
+  const suffix = `/${fy}`;
+  const pattern = `${storeCode}/%/${fy}`;
 
-    const r2 = await db.query(
-      `SELECT 1 FROM repair_app.otp_store WHERE job_id = $1`,
-      [jobId],
-    );
-    if (r2.rows.length > 0) continue;
+  // Find the highest serial from both job_data and otp_store
+  const [r1, r2] = await Promise.all([
+    db.query(
+      `SELECT "Job_Id" FROM repair_app.job_data
+       WHERE "Job_Id" LIKE $1
+       ORDER BY "Job_Id" DESC LIMIT 1`,
+      [pattern],
+    ),
+    db.query(
+      `SELECT job_id FROM repair_app.otp_store
+       WHERE job_id LIKE $1
+       ORDER BY job_id DESC LIMIT 1`,
+      [pattern],
+    ),
+  ]);
 
-    return jobId;
+  let maxSerial = 0;
+
+  const extractSerial = (id) => {
+    if (!id) return 0;
+    // Format: StoreCode/00001/2026-27
+    const parts = id.split("/");
+    if (parts.length >= 2) {
+      const num = parseInt(parts[1], 10);
+      return isNaN(num) ? 0 : num;
+    }
+    return 0;
+  };
+
+  if (r1.rows.length > 0) {
+    maxSerial = Math.max(maxSerial, extractSerial(r1.rows[0].Job_Id));
   }
+  if (r2.rows.length > 0) {
+    maxSerial = Math.max(maxSerial, extractSerial(r2.rows[0].job_id));
+  }
+
+  const nextSerial = String(maxSerial + 1).padStart(5, "0");
+  return `${prefix}${nextSerial}${suffix}`;
 };
 
 const generateNextCustomerId = async () => {
@@ -1034,6 +1072,8 @@ const sendOtp = async (req, res) => {
   }
 
   try {
+    const storeCode = req.session.storeId || req.session.userIdDisplay || "SYS";
+
     await cleanExpiredOTPs();
     await db.query(`DELETE FROM repair_app.otp_store WHERE phone = $1`, [
       rawPhone,
@@ -1042,7 +1082,7 @@ const sendOtp = async (req, res) => {
     const otp       = generateOTP();
     const istNow    = getISTTimestamp();
     const expiresAt = getISTDate(5 * 60 * 1000);
-    const jobId     = await generateUniqueJobId();
+    const jobId     = await generateUniqueJobId(storeCode);
     const custName  = (customer_name || "Customer").trim();
 
     await db.query(
